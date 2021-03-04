@@ -3,7 +3,7 @@
  * L.WOPI contains WOPI related logic
  */
 
-/* global $ w2ui toolbarUpMobileItems _ */
+/* global w2ui _ */
 L.Map.WOPI = L.Handler.extend({
 	// If the CheckFileInfo call fails on server side, we won't have any PostMessageOrigin.
 	// So use '*' because we still needs to send 'close' message to the parent frame which
@@ -247,25 +247,8 @@ L.Map.WOPI = L.Handler.extend({
 				console.error('Property "Values.id" not set');
 				return;
 			}
-
-			var toolbars = [w2ui['toolbar-up'], w2ui['actionbar'], w2ui['editbar']];
-			var found = false;
-
-			toolbars.forEach(function(toolbar) {
-				if (toolbar && toolbar.get(msg.Values.id)) {
-					found = true;
-					if (msg.MessageId === 'Show_Button') {
-						toolbar.show(msg.Values.id);
-					} else {
-						toolbar.hide(msg.Values.id);
-					}
-				}
-			});
-
-			if (!found) {
-				console.error('Toolbar button with id "' + msg.Values.id + '" not found.');
-				return;
-			}
+			var show = msg.MessageId === 'Show_Button';
+			this._map.uiManager.showButton(msg.Values.id, show);
 		}
 		else if (msg.MessageId === 'Remove_Statusbar_Element') {
 			if (!msg.Values) {
@@ -314,46 +297,9 @@ L.Map.WOPI = L.Handler.extend({
 				this._map.menubar.hideItem(msg.Values.id);
 			}
 		}
-		else if (msg.MessageId === 'Insert_Button') {
-			if (msg.Values) {
-				if (msg.Values.id && !w2ui['editbar'].get(msg.Values.id)
-				    && msg.Values.imgurl) {
-					if (this._map.isPermissionEdit()) {
-						// add the css rule for the image
-						var style = $('html > head > style');
-						if (style.length == 0)
-							$('html > head').append('<style/>');
-						$('html > head > style').append('.w2ui-icon.' + msg.Values.id + '{background: url(' + msg.Values.imgurl + ') no-repeat center !important; }');
-
-						// Position: Either specified by the caller, or defaulting to first position (before save)
-						var insertBefore = msg.Values.insertBefore || 'save';
-						// add the item to the toolbar
-						w2ui['editbar'].insert(insertBefore, [
-							{
-								type: 'button',
-								uno: msg.Values.unoCommand,
-								id: msg.Values.id,
-								img: msg.Values.id,
-								hint: _(msg.Values.hint), /* "Try" to localize ! */
-								/* Notify the host back when button is clicked (only when unoCommand is not set) */
-								postmessage: !Object.prototype.hasOwnProperty.call(msg.Values, 'unoCommand')
-							}
-						]);
-						if (msg.Values.mobile)
-						{
-							// Add to our list of items to preserve when in mobile mode
-							// FIXME: Wrap the toolbar in a class so that we don't make use
-							// global variables and functions like this
-							var idx = toolbarUpMobileItems.indexOf(insertBefore);
-							toolbarUpMobileItems.splice(idx, 0, msg.Values.id);
-						}
-					}
-					else if (this._map.isPermissionReadOnly()) {
-						// Just add a menu entry for it
-						this._map.fire('addmenu', {id: msg.Values.id, label: msg.Values.hint});
-					}
-				}
-			}
+		else if (msg.MessageId === 'Insert_Button' &&
+			msg.Values && msg.Values.id && msg.Values.imgurl) {
+			this._map.uiManager.insertButton(msg.Values);
 		}
 		else if (msg.MessageId === 'Disable_Default_UIAction') {
 			// Disable the default handler and action for a UI command.

@@ -154,7 +154,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 	},
 
 	_toolitemHandler: function(parentContainer, data, builder) {
-		if (data.command) {
+		if (data.command || data.postmessage) {
 			var handler = builder._toolitemHandlers[data.command];
 			if (handler)
 				handler(parentContainer, data, builder);
@@ -1866,6 +1866,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		var icon = L.DomUtil.create('div', builder.options.cssClass + ' ui-iconview-icon', parentContainer);
 		var img = L.DomUtil.create('img', builder.options.cssClass, icon);
 		img.src = entry.image;
+		img.alt = entry.text;
 
 		var text = L.DomUtil.create('div', builder.options.cssClass + ' ui-iconview-text', parentContainer);
 		text.innerText = entry.text;
@@ -1894,6 +1895,10 @@ L.Control.JSDialogBuilder = L.Control.extend({
 			var entry = L.DomUtil.create('div', builder.options.cssClass + ' ui-iconview-entry', container);
 			builder._iconViewEntry(entry, data, data.entries[i], builder);
 		}
+
+		var firstSelected = $(container).children('.selected').get(0);
+		if (firstSelected)
+			firstSelected.scrollIntoView({behavior: 'smooth', block: 'center'});
 
 		return false;
 	},
@@ -2235,12 +2240,12 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		var div = this._createIdentifiable('div', 'unotoolbutton ' + builder.options.cssClass + ' ui-content unospan', parentContainer, data);
 		controls['container'] = div;
 
-		if (data.command) {
-			var id = encodeURIComponent(data.command.substr('.uno:'.length)).replace(/\%/g, '');
+		if (data.command || data.postmessage === true) {
+			var id = data.command ? encodeURIComponent(data.command.substr('.uno:'.length)).replace(/\%/g, '') : data.id;
 			id = id.replace(/\./g, '-');
 			div.id = id;
 
-			var icon = builder._createIconURL(data.command);
+			var icon = data.icon ? data.icon : builder._createIconURL(data.command);
 			var buttonId = id + 'img';
 
 			button = L.DomUtil.create('img', 'ui-content unobutton', div);
@@ -2275,32 +2280,33 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				controls['label'] = label;
 			}
 
-			var updateFunction = function() {
-				var items = builder.map['stateChangeHandler'];
-				var state = items.getItemValue(data.command);
+			if (data.command) {
+				var updateFunction = function() {
+					var items = builder.map['stateChangeHandler'];
+					var state = items.getItemValue(data.command);
 
-				if (state && state === 'true') {
-					$(button).addClass('selected');
-					$(div).addClass('selected');
-				}
-				else {
-					$(button).removeClass('selected');
-					$(div).removeClass('selected');
-				}
+					if (state && state === 'true') {
+						$(button).addClass('selected');
+						$(div).addClass('selected');
+					}
+					else {
+						$(button).removeClass('selected');
+						$(div).removeClass('selected');
+					}
 
-				if (state && state === 'disabled')
-					$(div).addClass('disabled');
-				else
-					$(div).removeClass('disabled');
-			};
+					if (state && state === 'disabled')
+						$(div).addClass('disabled');
+					else
+						$(div).removeClass('disabled');
+				};
 
-			updateFunction();
+				updateFunction();
 
-			builder.map.on('commandstatechanged', function(e) {
-				if (e.commandName === data.command)
-					updateFunction();
-			}, this);
-
+				builder.map.on('commandstatechanged', function(e) {
+					if (e.commandName === data.command)
+						updateFunction();
+				}, this);
+			}
 		} else {
 			button = L.DomUtil.create('label', 'ui-content unolabel', div);
 			button.innerHTML = builder._cleanText(data.text);
@@ -2315,7 +2321,10 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		$(div).click(function () {
 			if (!$(div).hasClass('disabled')) {
 				builder.refreshSidebar = true;
-				builder.callback('toolbutton', 'click', button, data.command, builder);
+				if (data.postmessage)
+					builder.map.fire('postMessage', {msgId: 'Clicked_Button', args: {Id: data.id} });
+				else
+					builder.callback('toolbutton', 'click', button, data.command, builder);
 			}
 		});
 
@@ -2875,6 +2884,28 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				data.splice(idx, 0, this._missingLabelData[controlId]);
 				++idx;
 			}
+		}
+	},
+
+	// executes actions like changing the selection without rebuilding the widget
+	executeAction: function(container, data) {
+		var control = container.querySelector('#' + data.control_id);
+		if (!control) {
+			console.warn('executeAction: not found control with id: "' + data.control_id + '"');
+			return;
+		}
+
+		switch (data.action_type) {
+		case 'select':
+			$(control).children('.selected').removeClass('selected');
+
+			var pos = parseInt(data.position);
+			var entry = $(control).children().eq(pos);
+
+			entry.addClass('selected');
+			$(entry).get(0).scrollIntoView({behavior: 'smooth', block: 'center'});
+
+			break;
 		}
 	},
 

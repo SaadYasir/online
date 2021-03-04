@@ -6,7 +6,7 @@
 // Implement String::startsWith which is non-portable (Firefox only, it seems)
 // See http://stackoverflow.com/questions/646628/how-to-check-if-a-string-startswith-another-string#4579228
 
-/* global vex $ L _ isAnyVexDialogActive w2ui CPointSet CRectangle CPolyUtil CPolygon */
+/* global vex $ L _ isAnyVexDialogActive w2ui CPointSet CRectangle CPolyUtil CPolygon Cursor CBounds */
 /*eslint no-extend-native:0*/
 if (typeof String.prototype.startsWith !== 'function') {
 	String.prototype.startsWith = function (str) {
@@ -24,24 +24,6 @@ function hex2string(inData)
 		hexified.push(paddedHex);
 	}
 	return hexified.join('');
-}
-
-function marksAreEqual(mark1, mark2)
-{
-	return mark1._bounds._northEast.lat == mark2._bounds._northEast.lat
-		&& mark1._bounds._northEast.lng == mark2._bounds._northEast.lng
-		&& mark1._bounds._southWest.lat == mark2._bounds._southWest.lat
-		&& mark1._bounds._southWest.lng == mark2._bounds._southWest.lng;
-}
-
-function hasMark(collection, mark)
-{
-	for (var i = 0; i < collection.length; i++) {
-		if (marksAreEqual(mark, collection[i])) {
-			return true;
-		}
-	}
-	return false;
 }
 
 // CStyleData is used to obtain CSS property values from style data
@@ -69,12 +51,15 @@ var CStyleData = L.Class.extend({
 // on canvas using polygons (CPolygon).
 var CSelections = L.Class.extend({
 
-	initialize: function (pointSet, canvasOverlay, dpiScale, selectionsDataDiv, name) {
+	initialize: function (pointSet, canvasOverlay, dpiScale, selectionsDataDiv, map, isView, viewId) {
 		this._pointSet = pointSet ? pointSet : new CPointSet();
 		this._overlay = canvasOverlay;
 		this._dpiScale = dpiScale;
 		this._styleData = new CStyleData(selectionsDataDiv);
-		this._name = name;
+		this._map = map;
+		this._name = 'selections' + (isView ? '-viewid-' + viewId : '');
+		this._isView = isView;
+		this._viewId = viewId;
 		this._polygon = undefined;
 		this._updatePolygon();
 	},
@@ -105,10 +90,13 @@ var CSelections = L.Class.extend({
 
 	_updatePolygon: function() {
 		if (!this._polygon) {
+			var fillColor = this._isView ?
+				L.LOUtil.rgbToHex(this._map.getViewColor(this._viewId)) :
+				this._styleData.getPropValue('--fill-color');
 			var attributes = {
 				name: this._name,
 				pointerEvents: 'none',
-				fillColor: this._styleData.getPropValue('--fill-color'),
+				fillColor: fillColor,
 				fillOpacity: this._styleData.getPropValue('--fill-opacity'),
 				opacity: this._styleData.getFloatPropValue('--opacity'),
 				weight: Math.round(this._styleData.getIntPropValue('--weight') * this._dpiScale)
@@ -119,7 +107,46 @@ var CSelections = L.Class.extend({
 		}
 
 		this._polygon.setPointSet(this._pointSet);
+	},
+
+	remove: function() {
+		if (this._polygon)
+			this._overlay.removePath(this._polygon);
 	}
+});
+
+// CReferences is used to store and manage the CPath's of all
+// references in the current sheet.
+var CReferences = L.Class.extend({
+
+	initialize: function (canvasOverlay) {
+
+		this._overlay = canvasOverlay;
+		this._marks = [];
+	},
+
+	// mark should be a CPath.
+	addMark: function (mark) {
+		this._overlay.initPath(mark);
+		this._marks.push(mark);
+	},
+
+	// mark should be a CPath.
+	hasMark: function (mark) {
+		for (var i = 0; i < this._marks.length; ++i) {
+			if (mark.getBounds().equals(this._marks[i].getBounds()))
+				return true;
+		}
+
+		return false;
+	},
+
+	clear: function () {
+		for (var i = 0; i < this._marks.length; ++i)
+			this._overlay.removePath(this._marks[i]);
+		this._marks = [];
+	}
+
 });
 
 L.TileLayer = L.GridLayer.extend({
@@ -297,12 +324,9 @@ L.TileLayer = L.GridLayer.extend({
 		this._initContainer();
 		this._getToolbarCommandsValues();
 		this._selections = new CSelections(undefined, this._canvasOverlay,
-			this._painter._dpiScale, this._selectionsDataDiv, 'selections');
-		this._references = new L.LayerGroup();
+			this._painter._dpiScale, this._selectionsDataDiv, this._map, false);
+		this._references = new CReferences(this._canvasOverlay);
 		this._referencesAll = [];
-		if (this.options.permission !== 'readonly') {
-			map.addLayer(this._references);
-		}
 
 		// This layergroup contains all the layers corresponding to other's view
 		this._viewLayerGroup = new L.LayerGroup();
@@ -659,6 +683,7 @@ L.TileLayer = L.GridLayer.extend({
 	},
 
 	_onMessage: function (textMsg, img) {
+		this._saveMessageForReplay(textMsg);
 		// 'tile:' is the most common message type; keep this the first.
 		if (textMsg.startsWith('tile:')) {
 			this._onTileMsg(textMsg, img);
@@ -1327,14 +1352,13 @@ L.TileLayer = L.GridLayer.extend({
 		if (!this._docRepair.isVisible()) {
 			this._docRepair.addTo(this._map);
 			this._docRepair.fillActions(textMsg);
-			this._map.enable(false);
 			this._docRepair.show();
 		}
 	},
 
 	_onMousePointerMsg: function (textMsg) {
 		textMsg = textMsg.substring(14); // "mousepointer: "
-		textMsg = L.Cursor.getCustomCursor(textMsg) || textMsg;
+		textMsg = Cursor.getCustomCursor(textMsg) || textMsg;
 		if (this._map._container.style.cursor !== textMsg) {
 			this._map._container.style.cursor = textMsg;
 		}
@@ -1404,6 +1428,8 @@ L.TileLayer = L.GridLayer.extend({
 		this._visibleCursor = new L.LatLngBounds(
 			this._twipsToLatLng(recCursor.getTopLeft(), this._map.getZoom()),
 			this._twipsToLatLng(recCursor.getBottomRight(), this._map.getZoom()));
+		this._cursorCorePixels = CBounds.fromCompat(this._twipsToCorePixelsBounds(recCursor));
+
 		var cursorPos = this._visibleCursor.getNorthWest();
 		var docLayer = this._map._docLayer;
 		if ((docLayer._followEditor || docLayer._followUser) && this._map.lastActionByUser) {
@@ -1471,6 +1497,7 @@ L.TileLayer = L.GridLayer.extend({
 		this._viewCursors[viewId].bounds = new L.LatLngBounds(
 			this._twipsToLatLng(rectangle.getTopLeft(), this._map.getZoom()),
 			this._twipsToLatLng(rectangle.getBottomRight(), this._map.getZoom())),
+		this._viewCursors[viewId].corepxBounds = CBounds.fromCompat(this._twipsToCorePixelsBounds(rectangle));
 		this._viewCursors[viewId].part = parseInt(obj.part);
 
 		// FIXME. Server not sending view visible cursor
@@ -1489,9 +1516,7 @@ L.TileLayer = L.GridLayer.extend({
 			}
 		}
 
-		if (this.isCalc()) {
-			this._saveMessageForReplay(textMsg, viewId);
-		}
+		this._saveMessageForReplay(textMsg, viewId);
 	},
 
 	_onCellViewCursorMsg: function (textMsg) {
@@ -1506,9 +1531,11 @@ L.TileLayer = L.GridLayer.extend({
 		this._cellViewCursors[viewId] = this._cellViewCursors[viewId] || {};
 		if (!this._cellViewCursors[viewId].bounds) {
 			this._cellViewCursors[viewId].bounds = L.LatLngBounds.createDefault();
+			this._cellViewCursors[viewId].corePixelBounds = new L.Bounds();
 		}
 		if (obj.rectangle.match('EMPTY')) {
 			this._cellViewCursors[viewId].bounds = L.LatLngBounds.createDefault();
+			this._cellViewCursors[viewId].corePixelBounds = new L.Bounds();
 		}
 		else {
 			var strTwips = obj.rectangle.match(/\d+/g);
@@ -1520,6 +1547,9 @@ L.TileLayer = L.GridLayer.extend({
 			this._cellViewCursors[viewId].bounds = new L.LatLngBounds(
 				this._twipsToLatLng(boundsTwips.getTopLeft(), this._map.getZoom()),
 				this._twipsToLatLng(boundsTwips.getBottomRight(), this._map.getZoom()));
+			var corePixelBounds = this._twipsToCorePixelsBounds(boundsTwips);
+			corePixelBounds.round();
+			this._cellViewCursors[viewId].corePixelBounds = corePixelBounds;
 		}
 
 		this._cellViewCursors[viewId].part = parseInt(obj.part);
@@ -1540,17 +1570,25 @@ L.TileLayer = L.GridLayer.extend({
 		if (!this._isEmptyRectangle(this._cellViewCursors[viewId].bounds) && this._selectedPart === viewPart && this._map.hasInfoForView(viewId)) {
 			if (!cellViewCursorMarker) {
 				var backgroundColor = L.LOUtil.rgbToHex(this._map.getViewColor(viewId));
-				cellViewCursorMarker = L.rectangle(this._cellViewCursors[viewId].bounds, {fill: false, color: backgroundColor, weight: 2});
+				cellViewCursorMarker = new CRectangle(this._cellViewCursors[viewId].corePixelBounds, {
+					fill: false,
+					color: backgroundColor,
+					weight: 2,
+					toCompatUnits: function (corePx) {
+						return this._map.unproject(L.point(corePx)
+							.divideBy(this._painter._dpiScale));
+					}.bind(this)
+				});
 				this._cellViewCursors[viewId].marker = cellViewCursorMarker;
 				cellViewCursorMarker.bindPopup(this._map.getViewName(viewId), {autoClose: false, autoPan: false, backgroundColor: backgroundColor, color: 'white', closeButton: false});
+				this._canvasOverlay.initPath(cellViewCursorMarker);
 			}
 			else {
-				cellViewCursorMarker.setBounds(this._cellViewCursors[viewId].bounds);
+				cellViewCursorMarker.setBounds(this._cellViewCursors[viewId].corePixelBounds);
 			}
-			this._viewLayerGroup.addLayer(cellViewCursorMarker);
 		}
 		else if (cellViewCursorMarker) {
-			this._viewLayerGroup.removeLayer(cellViewCursorMarker);
+			this._canvasOverlay.removePath(cellViewCursorMarker);
 		}
 	},
 
@@ -1626,7 +1664,8 @@ L.TileLayer = L.GridLayer.extend({
 	_removeView: function(viewId) {
 		// Remove selection, if any.
 		if (this._viewSelections[viewId] && this._viewSelections[viewId].selection) {
-			this._viewLayerGroup.removeLayer(this._viewSelections[viewId].selection);
+			this._viewSelections[viewId].selection.remove();
+			this._viewSelections[viewId].selection = undefined;
 		}
 
 		// Remove the view and update (to refresh as needed).
@@ -1867,16 +1906,20 @@ L.TileLayer = L.GridLayer.extend({
 			});
 
 			this._viewSelections[viewId].part = viewPart;
-			this._viewSelections[viewId].polygons = L.PolyUtil.rectanglesToPolygons(rectangles, this);
+			var docLayer = this;
+			this._viewSelections[viewId].pointSet = CPolyUtil.rectanglesToPointSet(rectangles,
+				function (twipsPoint) {
+					var corePxPt = docLayer._twipsToCorePixels(twipsPoint);
+					corePxPt.round();
+					return corePxPt;
+				});
 		} else {
-			this._viewSelections[viewId].polygons = null;
+			this._viewSelections[viewId].pointSet = new CPointSet();
 		}
 
 		this._onUpdateTextViewSelection(viewId);
 
-		if (this.isCalc()) {
-			this._saveMessageForReplay(textMsg, viewId);
-		}
+		this._saveMessageForReplay(textMsg, viewId);
 	},
 
 	_updateReferenceMarks: function() {
@@ -1887,15 +1930,15 @@ L.TileLayer = L.GridLayer.extend({
 
 		for (var i = 0; i < this._referencesAll.length; i++) {
 			// Avoid doubled marks, add only marks for current sheet
-			if ((this._references == null || !hasMark(this._references.getLayers(), this._referencesAll[i].mark))
+			if (!this._references.hasMark(this._referencesAll[i].mark)
 				&& this._selectedPart === this._referencesAll[i].part) {
-				this._references.addLayer(this._referencesAll[i].mark);
+				this._references.addMark(this._referencesAll[i].mark);
 			}
 			if (!window.mode.isDesktop()) {
 				if (!this._referenceMarkerStart.isDragged) {
 					this._map.addLayer(this._referenceMarkerStart);
 					var sizeStart = this._referenceMarkerStart._icon.getBoundingClientRect();
-					var posStart = this._map.project(this._referencesAll[i].mark._bounds.getNorthWest());
+					var posStart = this._referencesAll[i].mark.getBounds().getTopLeft().divideBy(this._painter.getDpiScale());
 					posStart = posStart.subtract(new L.Point(sizeStart.width / 2, sizeStart.height / 2));
 					posStart = this._map.unproject(posStart);
 					this._referenceMarkerStart.setLatLng(posStart);
@@ -1904,7 +1947,7 @@ L.TileLayer = L.GridLayer.extend({
 				if (!this._referenceMarkerEnd.isDragged) {
 					this._map.addLayer(this._referenceMarkerEnd);
 					var sizeEnd = this._referenceMarkerEnd._icon.getBoundingClientRect();
-					var posEnd = this._map.project(this._referencesAll[i].mark._bounds.getSouthEast());
+					var posEnd = this._referencesAll[i].mark.getBounds().getBottomRight().divideBy(this._painter.getDpiScale());
 					posEnd = posEnd.subtract(new L.Point(sizeEnd.width / 2, sizeEnd.height / 2));
 					posEnd = this._map.unproject(posEnd);
 					this._referenceMarkerEnd.setLatLng(posEnd);
@@ -1936,8 +1979,13 @@ L.TileLayer = L.GridLayer.extend({
 						boundsTwips.getTopLeft(), boundsTwips.getTopRight()]);
 				}
 
-				var polygons = L.PolyUtil.rectanglesToPolygons(rectangles, this);
-				var reference = new L.Polygon(polygons, {
+				var docLayer = this;
+				var pointSet = CPolyUtil.rectanglesToPointSet(rectangles, function (twipsPoint) {
+					var corePxPt = docLayer._twipsToCorePixels(twipsPoint);
+					corePxPt.round();
+					return corePxPt;
+				});
+				var reference = new CPolygon(pointSet, {
 					pointerEvents: 'none',
 					fillColor: '#' + strColor,
 					fillOpacity: 0.25,
@@ -1979,7 +2027,8 @@ L.TileLayer = L.GridLayer.extend({
 					center = center.subtract(this._map.getSize().divideBy(2));
 					center.x = Math.round(center.x < 0 ? 0 : center.x);
 					center.y = Math.round(center.y < 0 ? 0 : center.y);
-					this._map.fire('scrollto', {x: center.x, y: center.y});
+					if (!this._map.wholeColumnSelected && !this._map.wholeRowSelected)
+						this._map.fire('scrollto', {x: center.x, y: center.y});
 				}
 			}
 		}
@@ -2336,7 +2385,7 @@ L.TileLayer = L.GridLayer.extend({
 	},
 
 	_clearReferences: function () {
-		this._references.clearLayers();
+		this._references.clear();
 
 		if (!this._referenceMarkerStart.isDragged)
 			this._map.removeLayer(this._referenceMarkerStart);
@@ -2375,7 +2424,7 @@ L.TileLayer = L.GridLayer.extend({
 	// / "beforeinput" events) and "up" for key releases (akin to the DOM
 	// "keyup" event).
 	//
-	// PageUp/PageDown are handled as special cases for spreadsheets - in
+	// PageUp/PageDown and select column & row are handled as special cases for spreadsheets - in
 	// addition of sending messages to loolwsd, they move the cell cursor around.
 	postKeyboardEvent: function(type, charCode, unoKeyCode) {
 		var winId = this._map.getWinId();
@@ -2396,6 +2445,12 @@ L.TileLayer = L.GridLayer.extend({
 					return;
 				}
 				this._cellCursorOnPgDn = new L.LatLngBounds(this._prevCellCursor.getSouthWest(), this._prevCellCursor.getNorthEast());
+			}
+			else if (unoKeyCode === 9476) { // Select whole column.
+				this._map.wholeColumnSelected = true;
+			}
+			else if (unoKeyCode === 5380) { // Select whole row.
+				this._map.wholeRowSelected = true;
 			}
 		}
 
@@ -2442,20 +2497,23 @@ L.TileLayer = L.GridLayer.extend({
 
 	_onZoomEnd: function () {
 		this._isZooming = false;
+		if (!this.isCalc())
+			this._replayPrintTwipsMsgs();
 		this._onUpdateCursor(null, true);
 		this.updateAllViewCursors();
 	},
 
 	_updateCursorPos: function () {
-		var pixBounds = L.bounds(this._map.latLngToLayerPoint(this._visibleCursor.getSouthWest()),
-			this._map.latLngToLayerPoint(this._visibleCursor.getNorthEast()));
-		var cursorSize = pixBounds.getSize().multiplyBy(this._map.getZoomScale(this._map.getZoom()));
-		var cursorPos = this._visibleCursor.getNorthWest();
+		var cursorPos = this._cursorCorePixels.getTopLeft();
+		var cursorSize = this._cursorCorePixels.getSize();
 
 		if (!this._cursorMarker) {
-			this._cursorMarker = L.cursor(cursorPos, cursorSize, {blink: true});
+			this._cursorMarker = new Cursor(cursorPos, cursorSize, this._map, {
+				blink: true,
+				dpiScale: this._painter.getDpiScale()
+			});
 		} else {
-			this._cursorMarker.setLatLng(cursorPos, cursorSize);
+			this._cursorMarker.setPositionSize(cursorPos, cursorSize);
 		}
 	},
 
@@ -2503,7 +2561,7 @@ L.TileLayer = L.GridLayer.extend({
 		this.eachView(this._viewCursors, function (item) {
 			var viewCursorMarker = item.marker;
 			if (viewCursorMarker) {
-				viewCursorMarker.setOpacity(this.isCursorVisible() && this._cursorMarker.getLatLng().equals(viewCursorMarker.getLatLng()) ? 0 : 1);
+				viewCursorMarker.setOpacity(this.isCursorVisible() && this._cursorMarker.getPosition().equals(viewCursorMarker.getPosition()) ? 0 : 1);
 			}
 		}, this, true);
 	},
@@ -2550,9 +2608,8 @@ L.TileLayer = L.GridLayer.extend({
 			return;
 		}
 
-		var pixBounds = L.bounds(this._map.latLngToLayerPoint(this._viewCursors[viewId].bounds.getSouthWest()),
-		                         this._map.latLngToLayerPoint(this._viewCursors[viewId].bounds.getNorthEast()));
-		var viewCursorPos = this._viewCursors[viewId].bounds.getNorthWest();
+		var pixBounds = this._viewCursors[viewId].corepxBounds;
+		var viewCursorPos = pixBounds.getTopLeft();
 		var viewCursorMarker = this._viewCursors[viewId].marker;
 		var viewCursorVisible = this._viewCursors[viewId].visible;
 		var viewPart = this._viewCursors[viewId].part;
@@ -2569,22 +2626,24 @@ L.TileLayer = L.GridLayer.extend({
 					header: true, // we want a 'hat' to our view cursors (which will contain view user names)
 					headerTimeout: 3000, // hide after some interval
 					zIndex: viewId,
-					headerName: this._map.getViewName(viewId)
+					headerName: this._map.getViewName(viewId),
+					dpiScale: this._painter.getDpiScale()
 				};
-				viewCursorMarker = L.cursor(viewCursorPos, pixBounds.getSize().multiplyBy(this._map.getZoomScale(this._map.getZoom())), viewCursorOptions);
+				viewCursorMarker = new Cursor(viewCursorPos, pixBounds.getSize(), this._map, viewCursorOptions);
 				this._viewCursors[viewId].marker = viewCursorMarker;
 			}
 			else {
-				viewCursorMarker.setLatLng(viewCursorPos, pixBounds.getSize().multiplyBy(this._map.getZoomScale(this._map.getZoom())));
+				viewCursorMarker.setPositionSize(viewCursorPos, pixBounds.getSize());
 			}
-			viewCursorMarker.setOpacity(this.isCursorVisible() && this._cursorMarker.getLatLng().equals(viewCursorMarker.getLatLng()) ? 0 : 1);
-			this._viewLayerGroup.addLayer(viewCursorMarker);
+			viewCursorMarker.setOpacity(this.isCursorVisible() && this._cursorMarker.getPosition().equals(viewCursorMarker.getPosition()) ? 0 : 1);
+			if (!viewCursorMarker.isVisible())
+				viewCursorMarker.add();
 		}
-		else if (viewCursorMarker) {
-			this._viewLayerGroup.removeLayer(viewCursorMarker);
+		else if (viewCursorMarker.isVisible()) {
+			viewCursorMarker.remove();
 		}
 
-		if (this._viewCursors[viewId].marker)
+		if (this._viewCursors[viewId].marker && this._viewCursors[viewId].marker.isVisible())
 			this._viewCursors[viewId].marker.showCursorHeader();
 	},
 
@@ -2595,7 +2654,7 @@ L.TileLayer = L.GridLayer.extend({
 	},
 
 	isCursorVisible: function() {
-		return this._map.hasLayer(this._cursorMarker);
+		return this._cursorMarker ? this._cursorMarker.isVisible() : false;
 	},
 
 	goToViewCursor: function(viewId) {
@@ -2621,30 +2680,24 @@ L.TileLayer = L.GridLayer.extend({
 
 	_onUpdateTextViewSelection: function (viewId) {
 		viewId = parseInt(viewId);
-		var viewPolygons = this._viewSelections[viewId].polygons;
+		var viewPointSet = this._viewSelections[viewId].pointSet;
 		var viewSelection = this._viewSelections[viewId].selection;
 		var viewPart = this._viewSelections[viewId].part;
 
-		if (viewPolygons &&
+		if (viewPointSet &&
 		    (this.isWriter() || this._selectedPart === viewPart)) {
 
-			// Reset previous selections
 			if (viewSelection) {
-				this._viewLayerGroup.removeLayer(viewSelection);
+				// change previous selections
+				viewSelection.setPointSet(viewPointSet);
+			} else {
+				viewSelection = new CSelections(viewPointSet, this._canvasOverlay,
+					this._painter._dpiScale, this._selectionsDataDiv, this._map, true, viewId);
+				this._viewSelections[viewId].selection = viewSelection;
 			}
-
-			viewSelection = new L.Polygon(viewPolygons, {
-				pointerEvents: 'none',
-				fillColor: L.LOUtil.rgbToHex(this._map.getViewColor(viewId)),
-				fillOpacity: 0.25,
-				weight: 2,
-				opacity: 0.25
-			});
-			this._viewSelections[viewId].selection = viewSelection;
-			this._viewLayerGroup.addLayer(viewSelection);
 		}
 		else if (viewSelection) {
-			this._viewLayerGroup.removeLayer(viewSelection);
+			viewSelection.clear();
 		}
 	},
 
@@ -2772,10 +2825,12 @@ L.TileLayer = L.GridLayer.extend({
 	// Update dragged graphics selection resize.
 	_onGraphicEdit: function (e) {
 		if (!e.pos) { return; }
+		if (!e.handleId) { return; }
 
 		var aPos = this._latLngToTwips(e.pos);
 		var selMin = this._graphicSelectionTwips.min;
 		var selMax = this._graphicSelectionTwips.max;
+		var handleId = e.handleId;
 
 		if (e.type === 'scalestart') {
 			this._graphicMarker.isDragged = true;
@@ -2794,136 +2849,23 @@ L.TileLayer = L.GridLayer.extend({
 				this._graphicMarker.dragVertDir = 1; // down handle
 		}
 		else if (e.type === 'scaleend') {
-			var oldSize = selMax.subtract(selMin);
-			var newSize = oldSize.clone();
-			var newPos = selMin.clone();
-			var center = this._graphicSelectionTwips.getCenter();
-			var horizDir = this._graphicMarker.dragHorizDir;
-			var vertDir = this._graphicMarker.dragVertDir;
-
-			var computePosAndSize = function (coord) {
-				var direction = (coord === 'x') ? horizDir : vertDir;
-				var delta;
-				if (direction === 0) {
-					newSize[coord] = Math.abs(aPos[coord] - center[coord]);
-					newPos[coord] = (aPos[coord] > center[coord]) ? center[coord] : center[coord] - newSize[coord];
-				}
-				else if (direction === -1) { // left/up handle
-					delta = selMin[coord] - aPos[coord];
-					newSize[coord] = oldSize[coord] + delta;
-					newPos[coord] = aPos[coord];
-				}
-				else if (direction === 1) {  // right/down handle
-					delta = aPos[coord] - selMax[coord];
-					newSize[coord] = oldSize[coord] + delta;
-					newPos[coord] = selMin[coord];
-				}
-			};
-
-			computePosAndSize('x');
-			computePosAndSize('y');
-
-			// do we need to perform uniform scaling ?
-			if (!this._isGraphicAngleDivisibleBy90()) {
-				var delta = 0;
-				if (horizDir !== undefined && vertDir === undefined) {
-					newSize.y = Math.round(oldSize.y * (newSize.x / oldSize.x));
-					delta = newSize.y - oldSize.y;
-					newPos.y = Math.round(selMin.y - delta / 2);
-				}
-				else if (horizDir === undefined && vertDir !== undefined) {
-					newSize.x = Math.round(oldSize.x * (newSize.y / oldSize.y));
-					delta = newSize.x - oldSize.x;
-					newPos.x = Math.round(selMin.x - delta / 2);
-				}
-			}
-
-			// try to keep shape inside document
-			if (newPos.x + newSize.x > this._docWidthTwips)
-				newPos.x = this._docWidthTwips - newSize.x;
-			if (newPos.x < 0)
-				newPos.x = 0;
-
-			if (newPos.y + newSize.y > this._docHeightTwips)
-				newPos.y = this._docHeightTwips - newSize.y;
-			if (newPos.y < 0)
-				newPos.y = 0;
-
-			// For an image in Writer we need to send the size of the image not of the selection box.
-			// So if the image has been rotated we need to compute its size starting from the size of the selection
-			// rectangle and the rotation angle.
-			var isSelectionWriterGraphic =
-				this._graphicSelection.extraInfo ? this._graphicSelection.extraInfo.isWriterGraphic : false;
-			if (isSelectionWriterGraphic) {
-				if (this._isGraphicAngleDivisibleBy90()) {
-					var k = this._graphicSelectionAngle / 9000;
-					// if k is even we have nothing to do since the rotation is 0 or 180.
-					// when k is odd we need to swap width and height.
-					if (k % 2 !== 0) {
-						var temp = newSize.x;
-						newSize.x = newSize.y;
-						newSize.y = temp;
-					}
-				}
-				else {
-					// let's say that the selection rectangle width is subdivided by a corner of the rotated image
-					// in 2 segments of length s and t and the selection rectangle height is subdivided by a corner
-					// of the rotated image in 2 segments of length u and v, so we get the following system of equations:
-					// s + t = w, u + v = h,
-					// l = u/t, l = s/v, where l = tan(rotation angle)
-					var w = newSize.x;
-					var h = newSize.y;
-					var angle = Math.PI * this._graphicSelectionAngle / 18000;
-					var c = Math.abs(Math.cos(angle));
-					var s = Math.abs(Math.sin(angle));
-					var l = s / c;
-					var u = (l * w - l * l * h) / (1 - l * l);
-					var v = h - u;
-					newSize.x = Math.round(u / s);
-					newSize.y = Math.round(v / c);
-				}
-			}
-
-			if (this.isCalc() && this.options.printTwipsMsgsEnabled) {
-				newPos = this.sheetGeometry.getPrintTwipsPointFromTile(newPos);
-			}
-
 			// fill params for uno command
 			var param = {
-				TransformPosX: {
+				HandleNum: {
 					type: 'long',
-					value: newPos.x
+					value: handleId
 				},
-				TransformPosY: {
+				NewPosX: {
 					type: 'long',
-					value: newPos.y
+					value: aPos.x
 				},
-				TransformWidth: {
+				NewPosY: {
 					type: 'long',
-					value: newSize.x
-				},
-				TransformHeight: {
-					type: 'long',
-					value: newSize.y
+					value: aPos.y
 				}
 			};
 
-			this._map.sendUnoCommand('.uno:TransformDialog ', param);
-
-			if (isSelectionWriterGraphic) {
-				param = {
-					TransformPosX: {
-						type: 'long',
-						value: newPos.x
-					},
-					TransformPosY: {
-						type: 'long',
-						value: newPos.y
-					}
-				};
-				this._map.sendUnoCommand('.uno:TransformDialog ', param);
-			}
-
+			this._map.sendUnoCommand('.uno:MoveShapeHandle', param);
 			this._graphicMarker.isDragged = false;
 			this._graphicMarker.setVisible(false);
 			this._graphicMarker.dragHorizDir = undefined;
@@ -3211,6 +3153,8 @@ L.TileLayer = L.GridLayer.extend({
 				scaling: extraInfo.isResizable,
 				rotation: extraInfo.isRotatable && !this.hasTableSelection(),
 				uniformScaling: !this._isGraphicAngleDivisibleBy90(),
+				handles: (extraInfo.handles) ? extraInfo.handles.kinds || [] : [],
+				shapeType: extraInfo.type,
 				scaleSouthAndEastOnly: this.hasTableSelection()});
 			if (extraInfo.dragInfo && extraInfo.dragInfo.svg) {
 				this._graphicMarker.removeEmbeddedSVG();
@@ -3725,6 +3669,13 @@ L.TileLayer = L.GridLayer.extend({
 		return new L.Bounds(newTopLeft, newTopLeft.add(rectSize));
 	},
 
+	_convertCalcTileTwips: function (point) {
+		if (!this.options.printTwipsMsgsEnabled || !this.sheetGeometry)
+			return point;
+		var newPoint = new L.Point(parseInt(point.x), parseInt(point.y));
+		return this.sheetGeometry.getTileTwipsPointFromPrint(newPoint);
+	},
+
 	_getEditCursorRectangle: function (msgObj) {
 
 		if (typeof msgObj !== 'object' || !Object.prototype.hasOwnProperty.call(msgObj,'rectangle')) {
@@ -3999,6 +3950,135 @@ L.TileLayer = L.GridLayer.extend({
 		if (annotation) {
 			$('#comment' + annotation._data.id).click();
 		}
-	}
+	},
 
+	_saveMessageForReplay: function (textMsg, viewId) {
+		// We will not get some messages (with coordinates)
+		// from core when zoom changes because print-twips coordinates are zoom-invariant. So we need to
+		// remember the last version of them and replay, when zoom is changed.
+		// In calc we need to replay the messages when sheet-geometry changes too. This is because it is possible for
+		// the updated print-twips messages to arrive before the sheet-geometry update message arrives.
+
+		if (!this._printTwipsMessagesForReplay) {
+			var ownViewTypes = this.isCalc() ? [
+				'cellcursor',
+				'referencemarks',
+				'cellselectionarea',
+				'textselection',
+				'invalidatecursor',
+				'textselectionstart',
+				'textselectionend',
+				'graphicselection',
+			] : [
+				'invalidatecursor',
+				'textselection'
+			];
+
+			var otherViewTypes = this.isCalc() ? [
+				'cellviewcursor',
+				'textviewselection',
+				'invalidateviewcursor',
+				'graphicviewselection',
+			] : [
+				'textviewselection',
+				'invalidateviewcursor'
+			];
+
+			this._printTwipsMessagesForReplay = new L.MessageStore(ownViewTypes, otherViewTypes);
+		}
+
+		var colonIndex = textMsg.indexOf(':');
+		if (colonIndex === -1) {
+			return;
+		}
+
+		var msgType = textMsg.substring(0, colonIndex);
+		this._printTwipsMessagesForReplay.save(msgType, textMsg, viewId);
+	},
+
+	_clearMsgReplayStore: function () {
+		if (!this._printTwipsMessagesForReplay) {
+			return;
+		}
+
+		this._printTwipsMessagesForReplay.clear();
+	},
+
+	_replayPrintTwipsMsgs: function () {
+		if (!this._printTwipsMessagesForReplay) {
+			return;
+		}
+
+		this._printTwipsMessagesForReplay.forEach(this._onMessage.bind(this));
+	},
+
+});
+
+
+L.MessageStore = L.Class.extend({
+
+	// ownViewTypes : The types of messages related to own view.
+	// otherViewTypes: The types of messages related to other views.
+	initialize: function (ownViewTypes, otherViewTypes) {
+
+		if (!Array.isArray(ownViewTypes) || !Array.isArray(otherViewTypes)) {
+			console.error('Unexpected argument types');
+			return;
+		}
+
+		var ownMessages = {};
+		ownViewTypes.forEach(function (msgType) {
+			ownMessages[msgType] = '';
+		});
+		this._ownMessages = ownMessages;
+
+		var othersMessages = {};
+		otherViewTypes.forEach(function (msgType) {
+			othersMessages[msgType] = [];
+		});
+		this._othersMessages = othersMessages;
+	},
+
+	clear: function () {
+		var msgs = this._ownMessages;
+		Object.keys(msgs).forEach(function (msgType) {
+			msgs[msgType] = '';
+		});
+
+		msgs = this._othersMessages;
+		Object.keys(msgs).forEach(function (msgType) {
+			msgs[msgType] = [];
+		});
+	},
+
+	save: function (msgType, textMsg, viewId) {
+
+		var othersMessage = (typeof viewId === 'number');
+
+		if (!othersMessage && Object.prototype.hasOwnProperty.call(this._ownMessages, msgType)) {
+			this._ownMessages[msgType] = textMsg;
+			return;
+		}
+
+		if (othersMessage && Object.prototype.hasOwnProperty.call(this._othersMessages, msgType)) {
+			this._othersMessages[msgType][viewId] = textMsg;
+		}
+	},
+
+	forEach: function (callback) {
+		if (typeof callback !== 'function') {
+			console.error('Invalid callback type');
+			return;
+		}
+
+		var ownMessages = this._ownMessages;
+		Object.keys(this._ownMessages).forEach(function (msgType) {
+			callback(ownMessages[msgType]);
+		});
+
+		var othersMessages = this._othersMessages;
+		Object.keys(othersMessages).forEach(function (msgType) {
+			othersMessages[msgType].forEach(callback);
+		});
+	}
 });

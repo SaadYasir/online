@@ -4,7 +4,7 @@
                          and allows to controll them (show/hide)
  */
 
-/* global $ setupToolbar w2ui w2utils */
+/* global $ setupToolbar w2ui w2utils toolbarUpMobileItems _ */
 L.Control.UIManager = L.Control.extend({
 	mobileWizard: null,
 
@@ -62,7 +62,6 @@ L.Control.UIManager = L.Control.extend({
 		setupToolbar(this.map);
 
 		this.map.addControl(L.control.documentNameInput());
-		this.map.addControl(L.control.scroll());
 		this.map.addControl(L.control.alertDialog());
 		this.mobileWizard = L.control.mobileWizard();
 		this.map.addControl(this.mobileWizard);
@@ -100,6 +99,8 @@ L.Control.UIManager = L.Control.extend({
 				var notebookbar = L.control.notebookbarCalc();
 			} else if (docType === 'presentation') {
 				notebookbar = L.control.notebookbarImpress();
+			} else if (docType === 'drawing') {
+				notebookbar = L.control.notebookbarDraw();
 			} else {
 				notebookbar = L.control.notebookbarWriter();
 			}
@@ -188,6 +189,8 @@ L.Control.UIManager = L.Control.extend({
 			var notebookbar = L.control.notebookbarCalc();
 		} else if (this.map.getDocType() === 'presentation') {
 			notebookbar = L.control.notebookbarImpress();
+		} else if (this.map.getDocType() === 'drawing') {
+			notebookbar = L.control.notebookbarDraw();
 		} else {
 			notebookbar = L.control.notebookbarWriter();
 		}
@@ -249,6 +252,82 @@ L.Control.UIManager = L.Control.extend({
 			this.addNotebookbarUI(adjustVertPos);
 			break;
 		}
+	},
+
+	// UI modification
+
+	insertButtonToClassicToolbar: function(button) {
+		if (!w2ui['editbar'].get(button.id)) {
+			if (this.map.isPermissionEdit()) {
+				// add the css rule for the image
+				var style = $('html > head > style');
+				if (style.length == 0)
+					$('html > head').append('<style/>');
+				$('html > head > style').append('.w2ui-icon.' + button.id + '{background: url(' + button.imgurl + ') no-repeat center !important; }');
+
+				// Position: Either specified by the caller, or defaulting to first position (before save)
+				var insertBefore = button.insertBefore || 'save';
+				// add the item to the toolbar
+				w2ui['editbar'].insert(insertBefore, [
+					{
+						type: 'button',
+						uno: button.unoCommand,
+						id: button.id,
+						img: button.id,
+						hint: _(button.hint), /* "Try" to localize ! */
+						/* Notify the host back when button is clicked (only when unoCommand is not set) */
+						postmessage: !Object.prototype.hasOwnProperty.call(button, 'unoCommand')
+					}
+				]);
+				if (button.mobile)
+				{
+					// Add to our list of items to preserve when in mobile mode
+					// FIXME: Wrap the toolbar in a class so that we don't make use
+					// global variables and functions like this
+					var idx = toolbarUpMobileItems.indexOf(insertBefore);
+					toolbarUpMobileItems.splice(idx, 0, button.id);
+				}
+			}
+			else if (this.map.isPermissionReadOnly()) {
+				// Just add a menu entry for it
+				this.map.fire('addmenu', {id: button.id, label: button.hint});
+			}
+		}
+	},
+
+	insertButton: function(button) {
+		if (!this.notebookbar)
+			this.insertButtonToClassicToolbar(button);
+		else
+			this.notebookbar.insertButtonToShortcuts(button);
+	},
+
+	showButtonInClassicToolbar: function(buttonId, show) {
+		var toolbars = [w2ui['toolbar-up'], w2ui['actionbar'], w2ui['editbar']];
+		var found = false;
+
+		toolbars.forEach(function(toolbar) {
+			if (toolbar && toolbar.get(buttonId)) {
+				found = true;
+				if (show) {
+					toolbar.show(buttonId);
+				} else {
+					toolbar.hide(buttonId);
+				}
+			}
+		});
+
+		if (!found) {
+			console.error('Toolbar button with id "' + buttonId + '" not found.');
+			return;
+		}
+	},
+
+	showButton: function(buttonId, show) {
+		if (!this.notebookbar)
+			this.showButtonInClassicToolbar(buttonId, show);
+		else
+			this.notebookbar.showShortcutsButton(buttonId, show);
 	},
 
 	// Menubar

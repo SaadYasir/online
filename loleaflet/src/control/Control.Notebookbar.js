@@ -12,6 +12,9 @@ L.Control.Notebookbar = L.Control.extend({
 	container: null,
 	builder: null,
 
+	additionalShortcutButtons: [],
+	hiddenShortcutButtons: [],
+
 	onAdd: function (map) {
 		// log and test window.ThisIsTheiOSApp = true;
 		this.map = map;
@@ -34,6 +37,7 @@ L.Control.Notebookbar = L.Control.extend({
 		this.map.on('notebookbar', this.onNotebookbar, this);
 		this.map.on('updatepermission', this.onUpdatePermission, this);
 		this.map.on('jsdialogupdate', this.onJSUpdate, this);
+		this.map.on('jsdialogaction', this.onJSAction, this);
 
 		$('#toolbar-wrapper').addClass('hasnotebookbar');
 		$('.main-nav').addClass('hasnotebookbar');
@@ -65,6 +69,7 @@ L.Control.Notebookbar = L.Control.extend({
 		this.map.off('updatepermission', this.onUpdatePermission, this);
 		this.map.off('notebookbar');
 		this.map.off('jsdialogupdate', this.onJSUpdate, this);
+		this.map.off('jsdialogaction', this.onJSAction, this);
 		$('.main-nav #document-header').remove();
 		$('.main-nav').removeClass('hasnotebookbar');
 		$('#toolbar-wrapper').removeClass('hasnotebookbar');
@@ -105,6 +110,21 @@ L.Control.Notebookbar = L.Control.extend({
 
 		var newControl = this.container.querySelector('#' + data.control.id);
 		newControl.scrollTop = scrollTop;
+	},
+
+	onJSAction: function (e) {
+		var data = e.data;
+
+		if (data.jsontype !== 'notebookbar')
+			return;
+
+		if (!this.builder)
+			return;
+
+		if (!this.container)
+			return;
+
+		this.builder.executeAction(this.container, data.data);
 	},
 
 	onUpdatePermission: function(e) {
@@ -196,21 +216,25 @@ L.Control.Notebookbar = L.Control.extend({
 				'type': 'toolbox',
 				'children': [
 					{
+						'id': 'menu',
 						'type': 'toolitem',
 						'text': _('Menu'),
 						'command': '.uno:Menubar'
 					},
 					{
+						'id': 'save',
 						'type': 'toolitem',
 						'text': _('Save'),
 						'command': '.uno:Save'
 					},
 					{
+						'id': 'undo',
 						'type': 'toolitem',
 						'text': _('Undo'),
 						'command': '.uno:Undo'
 					},
 					{
+						'id': 'redo',
 						'type': 'toolitem',
 						'text': _('Redo'),
 						'command': '.uno:Redo'
@@ -223,7 +247,67 @@ L.Control.Notebookbar = L.Control.extend({
 	createShortcutsBar: function() {
 		var shortcutsBar = L.DomUtil.create('div', 'notebookbar-shortcuts-bar');
 		$('#main-menu-state').after(shortcutsBar);
-		this.builder.build(shortcutsBar, this.getShortcutsBarData());
+
+		var shortcutsBarData = this.getShortcutsBarData();
+		var toolitems = shortcutsBarData[0].children;
+
+		for (var i in this.additionalShortcutButtons) {
+			var item = this.additionalShortcutButtons[i];
+			toolitems.push(item);
+		}
+
+		for (i in this.hiddenShortcutButtons) {
+			var toHide = this.hiddenShortcutButtons[i];
+			for (var j in toolitems) {
+				item = toolitems[j];
+				if (item.id == toHide) {
+					toolitems.splice(j, 1);
+					break;
+				}
+			}
+		}
+
+		this.builder.build(shortcutsBar, shortcutsBarData);
+	},
+
+	reloadShortcutsBar: function() {
+		$('.notebookbar-shortcuts-bar').remove();
+		this.createShortcutsBar();
+	},
+
+	insertButtonToShortcuts: function(button) {
+		for (var i in this.additionalShortcutButtons) {
+			var item = this.additionalShortcutButtons[i];
+			if (item.id === button.id)
+				return;
+		}
+
+		this.additionalShortcutButtons.push(
+			{
+				id: button.id,
+				type: 'toolitem',
+				text: button.label ? button.label : _(button.hint),
+				icon: button.imgurl,
+				command: button.unoCommand,
+				postmessage: button.unoCommand ? undefined : true,
+			}
+		);
+
+		this.reloadShortcutsBar();
+	},
+
+	showShortcutsButton: function(buttonId, show) {
+		var i = this.hiddenShortcutButtons.indexOf(buttonId);
+		if (i > -1) {
+			if (show === true)
+				this.hiddenShortcutButtons.splice(i, 1);
+
+			this.reloadShortcutsBar();
+			return;
+		}
+
+		this.hiddenShortcutButtons.push(buttonId);
+		this.reloadShortcutsBar();
 	},
 
 	setCurrentScrollPosition: function() {

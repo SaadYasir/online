@@ -4,6 +4,8 @@
 /// <reference path="CPolyline.ts" />
 /// <reference path="CPolygon.ts" />
 /// <reference path="CRectangle.ts" />
+/// <reference path="CSplitterLine.ts" />
+/// <reference path="../marker/Cursor.ts" />
 /* eslint-disable */
 
 // CanvasOverlay handles CPath rendering and mouse events handling via overlay-section of the main canvas.
@@ -29,12 +31,34 @@ class CanvasOverlay {
 	}
 
 	onResize() {
+		this.paths.forEach(function (path: CPath) {
+			path.onResize();
+		});
 		this.onDraw();
 	}
 
 	onDraw() {
 		// No need to "erase" previous drawings because tiles are draw first via its onDraw.
 		this.draw();
+	}
+
+	onMouseMove(position: Array<number>) {
+		var mousePos = new CPoint(position[0], position[1]);
+		this.paths.forEach(function (path:CPath) {
+			var pathBounds = path.getBounds();
+
+			if (!pathBounds.isValid())
+				return;
+
+			var mouseOverPath = pathBounds.contains(mousePos);
+			if (mouseOverPath && !path.isUnderMouse()) {
+				path.onMouseEnter(mousePos);
+				path.setUnderMouse(true);
+			} else if (!mouseOverPath && path.isUnderMouse()) {
+				path.onMouseLeave(mousePos);
+				path.setUnderMouse(false);
+			}
+		});
 	}
 
 	setOverlaySection(overlaySection: any) {
@@ -132,7 +156,7 @@ class CanvasOverlay {
 	}
 
 	// Applies canvas translation so that polygons/circles can be drawn using core-pixel coordinates.
-	private ctStart(clipArea?: CBounds, paneBounds?: CBounds) {
+	private ctStart(clipArea?: CBounds, paneBounds?: CBounds, fixed?: boolean) {
 		this.updateCanvasBounds();
 		var cOrigin = new CPoint(0, 0);
 		this.ctx.save();
@@ -140,7 +164,7 @@ class CanvasOverlay {
 		if (!paneBounds)
 			paneBounds = this.bounds.clone();
 
-		if (this.tsManager._inZoomAnim) {
+		if (this.tsManager._inZoomAnim && !fixed) {
 			// zoom-animation is in progress : so draw overlay on main canvas
 			// at the current frame's zoom level.
 			paneBounds = CBounds.fromCompat(paneBounds);
@@ -188,6 +212,18 @@ class CanvasOverlay {
 
 			this.ctx.transform(scale, 0, 0, scale, scale * cOrigin.x, scale * cOrigin.y);
 
+		} else if (this.tsManager._inZoomAnim && fixed) {
+
+			var scale = this.tsManager._zoomFrameScale;
+			this.ctx.transform(scale, 0, 0, scale, 0, 0);
+
+			if (clipArea) {
+				clipArea = new CBounds(
+					clipArea.min.divideBy(scale),
+					clipArea.max.divideBy(scale)
+				);
+			}
+
 		} else {
 			if (paneBounds.min.x)
 				cOrigin.x = -this.bounds.min.x;
@@ -222,7 +258,7 @@ class CanvasOverlay {
 			return;
 
 
-		this.ctStart(clipArea, paneBounds);
+		this.ctStart(clipArea, paneBounds, path.fixed);
 		this.ctx.beginPath();
 
 		for (i = 0; i < len; i++) {
@@ -244,7 +280,7 @@ class CanvasOverlay {
 		if (path.empty())
 			return;
 
-		this.ctStart(clipArea, paneBounds);
+		this.ctStart(clipArea, paneBounds, path.fixed);
 
 		var point = path.point;
 		var r: number = path.radius;
@@ -294,5 +330,9 @@ class CanvasOverlay {
 
 	bringToBack(path: CPath) {
 		// TODO: Implement this.
+	}
+
+	getMap(): any {
+		return this.map;
 	}
 };

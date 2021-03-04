@@ -242,7 +242,7 @@ define run_mobile_tests
 			$(MOBILE_CONFIG),$(ENV_EXTENDED),$(1),mobile,$(2))\
 	,\
 		$(eval SPEC_FILE=$(if $(1),$(MOBILE_TEST_FOLDER)/$(1)))\
-		$(call check_spec_existence,$(1),mobile)\
+		$(if $(1),$(call check_spec_existence,$(1),mobile))\
 		$(call run_test_headless,\
 			$(MOBILE_CONFIG),$(ENV_EXTENDED),$(SPEC_FILE))\
 	)
@@ -301,7 +301,7 @@ define run_desktop_tests
 			$(DESKTOP_CONFIG),$(ENV_EXTENDED),$(1),desktop,$(2))\
 	,\
 		$(eval SPEC_FILE=$(if $(1),$(DESKTOP_TEST_FOLDER)/$(1)))\
-		$(call check_spec_existence,$(1),desktop)\
+		$(if $(1),$(call check_spec_existence,$(1),desktop))\
 		$(call run_test_headless,\
 			$(DESKTOP_CONFIG),$(ENV_EXTENDED),$(SPEC_FILE))\
 	)
@@ -627,7 +627,7 @@ endef
 # Parameters:
 # 1 - spec:	      test file path (e.g. make check-mobile spec=...)
 # 2 - test type:      mobile, desktop or multi test.
-define check_spec_exisetnce
+define check_spec_existence
 	$(eval TEST_FILES=$(if $(filter mobile,$(2)),$(MOBILE_TEST_FILES),\
 				$(if $(filter desktop,$(2)),$(DESKTOP_TEST_FILES),$(MULTIUSER_TESTS))))
 	$(if $(filter $(1),$(TEST_FILES)),,$(error CypressError: Can't find the given spec file!))

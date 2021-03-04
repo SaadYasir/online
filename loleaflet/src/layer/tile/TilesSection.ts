@@ -23,7 +23,7 @@ class TilesSection {
 	processingOrder: number = null;
 	drawingOrder: number = null;
 	zIndex: number = null;
-	interactable: boolean = false;
+	interactable: boolean = true;
 	sectionProperties: any = {};
 	map: any;
 	offscreenCanvases: Array<any> = new Array(0);
@@ -72,11 +72,11 @@ class TilesSection {
 		if (spCxt) {
 			var splitPos = spCxt.getSplitPos().multiplyBy(this.dpiScale);
 			if (paneBounds.min.x) { // pane can move in x direction.
-				extendedBounds.min.x = Math.max(splitPos.x + 1, extendedBounds.min.x - halfExtraSize);
+				extendedBounds.min.x = Math.max(splitPos.x, extendedBounds.min.x - halfExtraSize);
 				extendedBounds.max.x += halfExtraSize;
 			}
 			if (paneBounds.min.y) { // pane can move in y direction.
-				extendedBounds.min.y = Math.max(splitPos.y + 1, extendedBounds.min.y - halfExtraSize);
+				extendedBounds.min.y = Math.max(splitPos.y, extendedBounds.min.y - halfExtraSize);
 				extendedBounds.max.y += halfExtraSize;
 			}
 		}
@@ -213,6 +213,7 @@ class TilesSection {
 		this.inZoomAnimation = setValue;
 	}
 
+	public onMouseWheel () {}
 	public onMouseMove () {}
 	public onMouseDown () {}
 	public onMouseUp () {}
@@ -221,7 +222,6 @@ class TilesSection {
 	public onClick () {}
 	public onDoubleClick () {}
 	public onContextMenu () {}
-	public onMouseWheel () {}
 	public onLongPress () {}
 	public onMultiTouchStart () {}
 	public onMultiTouchMove () {}

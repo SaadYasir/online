@@ -70,15 +70,15 @@ int Socket::createSocket(Socket::Type type)
 #if ENABLE_DEBUG
 static std::atomic<long> socketErrorCount;
 
-bool StreamSocket::simulateSocketError(bool)
+bool StreamSocket::simulateSocketError(bool read)
 {
     if ((socketErrorCount++ % 7) == 0)
     {
+        LOG_DBG("Simulating socket error during " << (read ? "read." : "write."));
         errno = EAGAIN;
         return true;
     }
 
-    LOG_DBG("Simulating socket error.");
     return false;
 }
 
@@ -87,11 +87,13 @@ bool SslStreamSocket::simulateSocketError(bool read)
 {
     if ((socketErrorCount++ % 7) == 0)
     {
-        _sslWantsTo = read ? SslWantsTo::Read : SslWantsTo::Write;
+        LOG_DBG("Simulating socket error during " << (read ? "read." : "write."));
+        // Note: maintain the _sslWantsTo state so we poll on
+        // the right event as that requested by the last ssl API.
+        errno = EAGAIN;
         return true;
     }
 
-    LOG_DBG("Simulating socket error.");
     return false;
 }
 #endif
@@ -1025,7 +1027,9 @@ bool StreamSocket::compactChunks(MessageMap *map)
     // shrink our size to fit
     map->_messageSize -= gap;
 
+#if ENABLE_DEBUG
     dumpState(std::cerr);
+#endif
 
     return true;
 }

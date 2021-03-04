@@ -31,7 +31,7 @@ DIRECTORY_TS = $(srcdir)/src/layer/tile $(srcdir)/src/control # Add ts directori
 SRC_TS_ALL := $(foreach dir, $(DIRECTORY_TS), $(wildcard $(dir)/*.ts))
 SRC_TS_JS_FILES := $(SRC_TS_ALL:.ts=.js)
 
-$(SRC_TS_ALL:.ts=.js): $(SRC_TS_ALL)
+$(SRC_TS_ALL:.ts=.js): $(SRC_TS_ALL:.ts=.ts)
 	$(builddir)/node_modules/typescript/bin/tsc $(@:.js=.ts) --outfile $@ --module none --lib dom,es2016 --target ES5
 
 MOCHA_DIR = $(srcdir)/mocha_tests
@@ -44,7 +44,7 @@ SRC_TS = $(srcdir)/src/layer/vector/CanvasOverlay.ts
 SRC_TS_JS = $(srcdir)/src/layer/vector/CanvasOverlay.js
 SRC_TS_JS_DST = $(patsubst $(srcdir)/%.js,$(DIST_FOLDER)/%.js,$(SRC_TS_JS_FILES)) $(DIST_FOLDER)/src/layer/vector/CanvasOverlay.js
 
-$(srcdir)/src/layer/vector/CanvasOverlay.js: $(srcdir)/src/layer/vector/*.ts
+$(srcdir)/src/layer/vector/CanvasOverlay.js: $(srcdir)/src/layer/vector/*.ts $(srcdir)/src/layer/marker/*.ts
 	$(builddir)/node_modules/typescript/bin/tsc $(srcdir)/src/layer/vector/CanvasOverlay.ts --outfile $(srcdir)/src/layer/vector/CanvasOverlay.js --module none --lib dom,es2016 --target ES5
 
 JQUERY_LIGHTNESS_IMAGE_PATH = $(srcdir)/images/jquery-ui-lightness
@@ -138,7 +138,6 @@ LOLEAFLET_CSS =\
 	$(srcdir)/css/toolbar-mobile.css \
 	$(srcdir)/css/partsPreviewControl.css \
 	$(srcdir)/css/sidebar.css \
-	$(srcdir)/css/scrollBar.css \
 	$(srcdir)/css/searchControl.css \
 	$(srcdir)/css/impress.css \
 	$(srcdir)/css/impress-mobile.css \
@@ -146,7 +145,6 @@ LOLEAFLET_CSS =\
 	$(srcdir)/css/writer.css \
 	$(srcdir)/css/writer-mobile.css \
 	$(srcdir)/css/editor.css \
-	$(srcdir)/css/jquery.mCustomScrollbar.css \
 	$(builddir)/node_modules/jquery-contextmenu/dist/jquery.contextMenu.css \
 	$(builddir)/node_modules/vex-js/dist/css/vex.css \
 	$(builddir)/node_modules/vex-js/dist/css/vex-theme-plain.css \
@@ -187,7 +185,6 @@ LOLEAFLET_LIBS_JS +=\
 endif
 
 LOLEAFLET_LIBS_JS +=\
-	jquery.mCustomScrollbar.js \
 	w2ui-1.5.rc1.js \
 	viamapi-client.js
 
@@ -222,6 +219,7 @@ LOLEAFLET_JS =\
 	src/layer/tile/CanvasSectionProps.js \
 	src/layer/tile/CanvasSectionContainer.js \
 	src/layer/tile/TilesSection.js \
+	src/layer/tile/ScrollSection.js \
 	src/layer/vector/CanvasOverlay.js \
 	src/layer/tile/GridLayer.js \
 	src/layer/tile/TileLayer.js \
@@ -239,7 +237,6 @@ LOLEAFLET_JS =\
 	src/layer/marker/Icon.js \
 	src/layer/marker/Icon.Default.js \
 	src/layer/marker/Marker.js \
-	src/layer/marker/Cursor.js \
 	src/layer/marker/DivIcon.js \
 	src/layer/Popup.js \
 	src/layer/Layer.Popup.js \
@@ -255,7 +252,6 @@ LOLEAFLET_JS =\
 	src/geometry/PolyUtil.js \
 	src/layer/vector/Polygon.js \
 	src/layer/vector/Rectangle.js \
-	src/layer/vector/SplitterLine.js \
 	src/layer/vector/CircleMarker.js \
 	src/layer/vector/Circle.js \
 	src/layer/vector/SVG.js \
@@ -308,7 +304,6 @@ LOLEAFLET_JS =\
 	src/control/Control.Tabs.js \
 	src/control/Control.Permission.js \
 	src/control/Control.Selection.js \
-	src/control/Control.Scroll.js \
 	src/control/Control.LokDialog.js \
 	src/control/Control.AlertDialog.js \
 	src/control/Control.Infobar.js src/control/ColorPicker.js \
@@ -336,6 +331,7 @@ LOLEAFLET_JS =\
 	src/control/Control.NotebookbarWriter.js \
 	src/control/Control.NotebookbarCalc.js \
 	src/control/Control.NotebookbarImpress.js \
+	src/control/Control.NotebookbarDraw.js \
 	src/control/Control.NotebookbarBuilder.js \
 	src/control/Control.AutofilterDropdown.js \
 	src/control/Control.Layers.js \
@@ -658,6 +654,7 @@ pot:
 		src/control/Control.NotebookbarWriter.js \
 		src/control/Control.NotebookbarCalc.js \
 		src/control/Control.NotebookbarImpress.js \
+		src/control/Control.NotebookbarDraw.js \
 		src/control/Control.NotebookbarBuilder.js \
 		src/control/Control.AutofilterDropdown.js \
 		src/control/Parts.js \

@@ -108,7 +108,7 @@ L.Control.NotebookbarBuilder = L.Control.JSDialogBuilder.extend({
 		this._toolitemHandlers['.uno:ShareDocument'] = function() {};
 		this._toolitemHandlers['.uno:EditDoc'] = function() {};
 		this._toolitemHandlers['.uno:AssignLayout'] = function() {};
-		this._toolitemHandlers['.uno:ConnectorToolbox'] = function() {};
+		this._toolitemHandlers['.uno:ConnectorToolbox'] = this._shapesControl;
 		this._toolitemHandlers['.uno:PresentationCurrentSlide'] = function() {};
 		this._toolitemHandlers['.uno:PresentationLayout'] = function() {};
 		this._toolitemHandlers['.uno:CapturePoint'] = function() {};
@@ -169,6 +169,20 @@ L.Control.NotebookbarBuilder = L.Control.JSDialogBuilder.extend({
 		this._toolitemHandlers['.uno:BezierDelete'] = function() {};
 		this._toolitemHandlers['.uno:BezierSmooth'] = function() {};
 		this._toolitemHandlers['.uno:GlueEditMode'] = function() {};
+
+		/*Draw Home Tab*/
+		this._toolitemHandlers['.uno:ZoomMode'] = function() {};
+		this._toolitemHandlers['.uno:ObjectAlign'] = function() {};
+		this._toolitemHandlers['.uno:ObjectPosition'] = function() {};
+		this._toolitemHandlers['.uno:GlueInsertPoint'] = function() {};
+		this._toolitemHandlers['.uno:SnapPoints'] = function() {};
+		this._toolitemHandlers['.uno:SnapBorder'] = function() {};
+		this._toolitemHandlers['.uno:HelplinesMove'] = function() {};
+		this._toolitemHandlers['.uno:SnapFrame'] = function() {};
+		this._toolitemHandlers['.uno:HelplinesVisible'] = function() {};
+		this._toolitemHandlers['.uno:HelplinesUse'] = function() {};
+		this._toolitemHandlers['.uno:GridVisible'] = function() {};
+		this._toolitemHandlers['.uno:GridUse'] = function() {};
 
 		/*Graphic Tab*/
 		this._toolitemHandlers['.uno:Crop'] = function() {};
@@ -487,7 +501,11 @@ L.Control.NotebookbarBuilder = L.Control.JSDialogBuilder.extend({
 		$(control.container).click(function () {
 			if (!$('.insertshape-grid').length) {
 				$(control.container).w2overlay(window.getShapesPopupHtml());
-				window.insertShapes('insertshapes');
+				if (data.command === '.uno:ConnectorToolbox') {
+					window.insertShapes('insertconnectors');
+				} else {
+					window.insertShapes('insertshapes');
+				}
 
 				$('.insertshape-grid .row .col').click(function () {
 					$(control.container).w2overlay();

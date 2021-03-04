@@ -11,7 +11,7 @@ function isAnyVexDialogActive() {
 	return res;
 }
 
-/* global vex $ _ */
+/* global vex $ _ Cursor */
 L.Map = L.Evented.extend({
 
 	statics: {
@@ -94,7 +94,7 @@ L.Map = L.Evented.extend({
 			this.setView(L.latLng(options.center), options.zoom, {reset: true});
 		}
 
-		L.Cursor.imagePath = options.cursorURL;
+		Cursor.imagePath = options.cursorURL;
 
 		if (options.webserver === undefined) {
 			var protocol = window.location.protocol === 'file:' ? 'https:' : window.location.protocol;
@@ -567,6 +567,13 @@ L.Map = L.Evented.extend({
 	setDocBounds: function (bounds) {
 		bounds = L.latLngBounds(bounds);
 		this.options.docBounds = bounds;
+	},
+
+	getCorePxDocBounds: function () {
+		var topleft = this.project(this.options.docBounds.getNorthWest());
+		var bottomRight = this.project(this.options.docBounds.getSouthEast());
+		return new L.Bounds(this._docLayer._cssPixelsToCore(topleft),
+			this._docLayer._cssPixelsToCore(bottomRight));
 	},
 
 	panInsideBounds: function (bounds, options) {
@@ -1194,7 +1201,7 @@ L.Map = L.Evented.extend({
 	},
 
 	showCalcInputBar: function(deckOffset) {
-		if (this.dialog._calcInputBar && !this.dialog._calcInputBar.isPainting) {
+		if (this.dialog && this.dialog._calcInputBar && !this.dialog._calcInputBar.isPainting) {
 			var id = this.dialog._calcInputBar.id;
 			var calcInputbar = L.DomUtil.get('calc-inputbar');
 			if (calcInputbar) {
@@ -1675,16 +1682,6 @@ L.Map = L.Evented.extend({
 		return Math.max(min, Math.min(max, zoom));
 	},
 
-	enable: function(enabled) {
-		this._enabled = enabled;
-		if (this._enabled) {
-			$('.scroll-container').mCustomScrollbar('update');
-		}
-		else {
-			$('.scroll-container').mCustomScrollbar('disable');
-		}
-	},
-
 	_goToViewId: function(id) {
 		if (id === -1)
 			return;
@@ -1783,6 +1780,12 @@ L.Map = L.Evented.extend({
 	getTileSectionMgr: function() {
 		if (this._docLayer)
 			return this._docLayer._painter;
+		return undefined;
+	},
+
+	getCursorOverlayContainer: function() {
+		if (this._docLayer)
+			return this._docLayer._cursorOverlayDiv;
 		return undefined;
 	}
 });

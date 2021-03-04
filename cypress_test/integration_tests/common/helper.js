@@ -568,27 +568,6 @@ function initAliasToNegative(aliasName) {
 	cy.log('Initializing alias to a negative value - end.');
 }
 
-// Initialize an alias to an empty string. It can be useful
-// when we use an alias as a variable and later we intend to
-// set it to a non-empty string.
-// Parameters:
-// aliasName - a string, expected to be used as alias.
-function initAliasToEmptyString(aliasName) {
-	cy.log('Initializing alias to empty string - start.');
-	cy.log('Param - aliasName: ' + aliasName);
-
-	// Do an empty slice to generate empty string
-	cy.get('#copy-paste-container')
-		.invoke('css', 'display')
-		.invoke('slice', '0', '0')
-		.as(aliasName);
-
-	cy.get('@' + aliasName)
-		.should('be.equal', '');
-
-	cy.log('Initializing alias to empty string - end.');
-}
-
 // Run a code snippet if we are inside Calc.
 function doIfInCalc(callback) {
 	cy.get('#document-container')
@@ -902,7 +881,7 @@ function doIfOnDesktop(callback) {
 // cursorSelector - selector for the cursor DOM element (document cursor is the default).
 function moveCursor(direction, modifier,
 	checkCursorVis = true,
-	cursorSelector = '.leaflet-overlay-pane .blinking-cursor') {
+	cursorSelector = '.cursor-overlay .blinking-cursor') {
 	cy.log('Moving text cursor - start.');
 	cy.log('Param - direction: ' + direction);
 	cy.log('Param - modifier: ' + modifier);
@@ -910,17 +889,22 @@ function moveCursor(direction, modifier,
 	cy.log('Param - cursorSelector: ' + cursorSelector);
 
 	// Get the original cursor position.
-	if (direction === 'up' ||
-		direction === 'down' ||
-		(direction === 'home' && modifier === 'ctrl') ||
-		(direction === 'end' && modifier === 'ctrl')) {
-		getCursorPos('top', 'origCursorPos', cursorSelector);
-	} else if (direction === 'left' ||
-		direction === 'right' ||
-		direction === 'home' ||
-		direction === 'end') {
-		getCursorPos('left', 'origCursorPos', cursorSelector);
-	}
+	var origCursorPos = 0;
+	cy.get(cursorSelector)
+		.should(function(cursor) {
+			if (direction === 'up' ||
+				direction === 'down' ||
+				(direction === 'home' && modifier === 'ctrl') ||
+				(direction === 'end' && modifier === 'ctrl')) {
+				origCursorPos = cursor.offset().top;
+			} else if (direction === 'left' ||
+				direction === 'right' ||
+				direction === 'home' ||
+				direction === 'end') {
+				origCursorPos = cursor.offset().left;
+			}
+			expect(origCursorPos).to.not.equal(0);
+		});
 
 	// Move the cursor using keyboard input.
 	var key = '';
@@ -947,22 +931,19 @@ function moveCursor(direction, modifier,
 	typeIntoDocument(key);
 
 	// Make sure the cursor position was changed.
-	cy.get('@origCursorPos')
-		.then(function(origCursorPos) {
-			cy.get(cursorSelector)
-				.should(function(cursor) {
-					if (direction === 'up' ||
-						direction === 'down' ||
-						(direction === 'home' && modifier === 'ctrl') ||
-						(direction === 'end' && modifier === 'ctrl')) {
-						expect(cursor.offset().top).to.not.equal(origCursorPos);
-					} else if (direction === 'left' ||
-								direction === 'right' ||
-								direction === 'end' ||
-								direction === 'home') {
-						expect(cursor.offset().left).to.not.equal(origCursorPos);
-					}
-				});
+	cy.get(cursorSelector)
+		.should(function(cursor) {
+			if (direction === 'up' ||
+				direction === 'down' ||
+				(direction === 'home' && modifier === 'ctrl') ||
+				(direction === 'end' && modifier === 'ctrl')) {
+				expect(cursor.offset().top).to.not.equal(origCursorPos);
+			} else if (direction === 'left' ||
+					direction === 'right' ||
+					direction === 'end' ||
+					direction === 'home') {
+				expect(cursor.offset().left).to.not.equal(origCursorPos);
+			}
 		});
 
 	// Cursor should be visible after move, because the view always follows it.
@@ -989,7 +970,7 @@ function typeIntoDocument(text) {
 // offsetProperty - which offset position we need (e.g. 'left' or 'top').
 // aliasName - we create an alias with the queried position.
 // cursorSelector - selector to find the correct cursor element in the DOM.
-function getCursorPos(offsetProperty, aliasName, cursorSelector = '.leaflet-overlay-pane .blinking-cursor') {
+function getCursorPos(offsetProperty, aliasName, cursorSelector = '.cursor-overlay .blinking-cursor') {
 	initAliasToNegative(aliasName);
 
 	cy.get(cursorSelector)
@@ -1062,8 +1043,8 @@ class Bounds {
 	}
 
 	toString() {
-		return '{ "top": ' + this.top + ', "left": ' + this.left
-			+ ', "width": ' + this.width + ', "height": ' + this.height + ' }';
+		return '{"top":' + this.top + ',"left":' + this.left
+			+ ',"width":' + this.width + ',"height":' + this.height + '}';
 	}
 }
 
@@ -1094,6 +1075,50 @@ function overlayItemHasBounds(itemDivId, expectedBounds) {
 		});
 }
 
+// This ensures that the overlay item has different bounds from the given one
+// via its test div element.
+// Parameters:
+// itemDivId - The id of the test div element corresponding to the overlay item.
+// bounds - A Bounds object with the bounds data to compare.
+function overlayItemHasDifferentBoundsThan(itemDivId, bounds) {
+	cy.log(bounds.toString());
+	cy.get(itemDivId)
+		.should(function (elem) {
+			expect(elem.text()).to.not.equal(bounds.toString());
+		});
+}
+
+// Type some text into an input DOM item.
+// Parameters:
+// selector - selector to find the correct input item in the DOM.
+// text - string to type in (can contain cypress command strings).
+// clearBefore - whether clear the existing content or not.
+// prop - whether the value is set as property or attribute (depends on implementation).
+function typeIntoInputField(selector, text, clearBefore = true, prop = true)
+{
+	cy.log('Typing into input field - start.');
+
+	if (clearBefore) {
+		cy.get(selector)
+			.focus()
+			.clear()
+			.type(text + '{enter}');
+	} else {
+		cy.get(selector)
+			.type(text + '{enter}');
+	}
+
+	if (prop) {
+		cy.get(selector)
+			.should('have.prop', 'value', text);
+	} else {
+		cy.get(selector)
+			.should('have.attr', 'value', text);
+	}
+
+	cy.log('Typing into input field - end.');
+}
+
 module.exports.loadTestDoc = loadTestDoc;
 module.exports.assertCursorAndFocus = assertCursorAndFocus;
 module.exports.assertNoKeyboardInput = assertNoKeyboardInput;
@@ -1104,7 +1129,6 @@ module.exports.expectTextForClipboard = expectTextForClipboard;
 module.exports.matchClipboardText = matchClipboardText;
 module.exports.afterAll = afterAll;
 module.exports.initAliasToNegative = initAliasToNegative;
-module.exports.initAliasToEmptyString = initAliasToEmptyString;
 module.exports.doIfInCalc = doIfInCalc;
 module.exports.doIfInImpress = doIfInImpress;
 module.exports.doIfInWriter = doIfInWriter;
@@ -1131,3 +1155,5 @@ module.exports.textSelectionShouldNotExist = textSelectionShouldNotExist;
 module.exports.Bounds = Bounds;
 module.exports.getOverlayItemBounds = getOverlayItemBounds;
 module.exports.overlayItemHasBounds = overlayItemHasBounds;
+module.exports.overlayItemHasDifferentBoundsThan = overlayItemHasDifferentBoundsThan;
+module.exports.typeIntoInputField = typeIntoInputField;

@@ -23,14 +23,12 @@ describe('Statubar tests.', function() {
 		cy.get('#StatusDocPos')
 			.should('have.text', 'Sheet 1 of 2');
 
-		cy.contains('.spreadsheet-tab', 'Sheet2')
-			.click();
+		helper.clickOnIdle('.spreadsheet-tab', 'Sheet2');
 
 		cy.get('#StatusDocPos')
 			.should('have.text', 'Sheet 2 of 2');
 
-		cy.contains('.spreadsheet-tab', 'Sheet1')
-			.click();
+		helper.clickOnIdle('.spreadsheet-tab', 'Sheet1');
 
 		cy.get('#StatusDocPos')
 			.should('have.text', 'Sheet 1 of 2');
@@ -40,16 +38,12 @@ describe('Statubar tests.', function() {
 		cy.get('#RowColSelCount')
 			.should('have.text', '\u00a0Select multiple cells\u00a0');
 
-		cy.get('input#addressInput')
-			.clear()
-			.type('A1:A2{enter}');
+		helper.typeIntoInputField('input#addressInput', 'A1:A2');
 
 		cy.get('#RowColSelCount')
 			.should('have.text', 'Selected: 2 rows, 1 column');
 
-		cy.get('input#addressInput')
-			.clear()
-			.type('A1{enter}');
+		helper.typeIntoInputField('input#addressInput', 'A1');
 
 		cy.get('#RowColSelCount')
 			.should('have.text', '\u00a0Select multiple cells\u00a0');
@@ -74,16 +68,12 @@ describe('Statubar tests.', function() {
 		cy.get('#StateTableCell')
 			.should('have.text', 'Average: ; Sum: 0');
 
-		cy.get('input#addressInput')
-			.clear()
-			.type('A1:A2{enter}');
+		helper.typeIntoInputField('input#addressInput', 'A1:A2');
 
 		cy.get('#StateTableCell')
 			.should('have.text', 'Average: 15.5; Sum: 31');
 
-		cy.get('input#addressInput')
-			.clear()
-			.type('A1{enter}');
+		helper.typeIntoInputField('input#addressInput', 'A1');
 
 		cy.get('#StateTableCell')
 			.should('have.text', 'Average: 10; Sum: 10');

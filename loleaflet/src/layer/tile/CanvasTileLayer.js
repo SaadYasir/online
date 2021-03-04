@@ -3,7 +3,7 @@
  * L.CanvasTileLayer is a L.TileLayer with canvas based rendering.
  */
 
-/* global L CanvasSectionContainer CanvasOverlay */
+/* global L CanvasSectionContainer CanvasOverlay CSplitterLine CStyleData CPoint */
 
 L.TileCoordData = L.Class.extend({
 
@@ -59,6 +59,24 @@ L.TileSectionManager = L.Class.extend({
 		this._splitPos = splitPanesContext ?
 			splitPanesContext.getSplitPos() : new L.Point(0, 0);
 		this._updatesRunning = false;
+		this._mirrorEventsFromSourceToCanvasSectionContainer(document.getElementById('map'));
+	},
+
+	// Map and TilesSection overlap entirely. Map is above tiles section. In order to handle events in tiles section, we need to mirror them from map.
+	_mirrorEventsFromSourceToCanvasSectionContainer: function (sourceElement) {
+		var that = this;
+		sourceElement.addEventListener('mousemove', function (e) { that._sectionContainer.onMouseMove(e); }, true);
+		sourceElement.addEventListener('mousedown', function (e) { that._sectionContainer.onMouseDown(e); }, true);
+		sourceElement.addEventListener('mouseup', function (e) { that._sectionContainer.onMouseUp(e); }, true);
+		sourceElement.addEventListener('click', function (e) { that._sectionContainer.onClick(e); }, true);
+		sourceElement.addEventListener('dblclick', function (e) { that._sectionContainer.onDoubleClick(e); }, true);
+		sourceElement.addEventListener('contextmenu', function (e) { that._sectionContainer.onContextMenu(e); }, true);
+		sourceElement.addEventListener('wheel', function (e) { that._sectionContainer.onMouseWheel(e); }, true);
+		sourceElement.addEventListener('mouseleave', function (e) { that._sectionContainer.onMouseLeave(e); }, true);
+		sourceElement.addEventListener('touchstart', function (e) { that._sectionContainer.onTouchStart(e); }, true);
+		sourceElement.addEventListener('touchmove', function (e) { that._sectionContainer.onTouchMove(e); }, true);
+		sourceElement.addEventListener('touchend', function (e) { that._sectionContainer.onTouchEnd(e); }, true);
+		sourceElement.addEventListener('touchcancel', function (e) { that._sectionContainer.onTouchCancel(e); }, true);
 	},
 
 	startUpdates: function () {
@@ -164,7 +182,8 @@ L.TileSectionManager = L.Class.extend({
 			},
 			onInitialize: canvasOverlay.onInitialize.bind(canvasOverlay),
 			onResize: canvasOverlay.onResize.bind(canvasOverlay), // will call onDraw.
-			onDraw: canvasOverlay.onDraw.bind(canvasOverlay)
+			onDraw: canvasOverlay.onDraw.bind(canvasOverlay),
+			onMouseMove: canvasOverlay.onMouseMove.bind(canvasOverlay),
 		}, L.CSections.Tiles.name); // 'tile' section is the parent.
 		canvasOverlay.setOverlaySection(this._sectionContainer.getSectionWithName(L.CSections.Overlays.name));
 	},
@@ -352,9 +371,9 @@ L.TileSectionManager = L.Class.extend({
 
 				// Top left position in the offscreen canvas.
 				var sourceTopLeft = new L.Point(
-					Math.max(paneBounds.min.x ? splitPos.x + 1 : 0,
+					Math.max(paneBounds.min.x ? splitPos.x: 0,
 						center.x - (center.x - paneBounds.min.x) / scale),
-					Math.max(paneBounds.min.y ? splitPos.y + 1 : 0,
+					Math.max(paneBounds.min.y ? splitPos.y: 0,
 						center.y - (center.y - paneBounds.min.y) / scale))
 					._subtract(paneBounds.min)._add(paneBoundsOffset);
 
@@ -431,6 +450,10 @@ L.TileSectionManager = L.Class.extend({
 			this._tilesSection.setInZoomAnim(false);
 			this._inZoomAnim = false;
 		}
+	},
+
+	getTileSectionPos : function () {
+		return new CPoint(this._tilesSection.myTopLeft[0], this._tilesSection.myTopLeft[1]);
 	}
 });
 
@@ -459,11 +482,15 @@ L.CanvasTileLayer = L.TileLayer.extend({
 		this._container.style.position = 'absolute';
 		this._cursorDataDiv = L.DomUtil.create('div', 'cell-cursor-data', this._canvasContainer);
 		this._selectionsDataDiv = L.DomUtil.create('div', 'selections-data', this._canvasContainer);
+		this._splittersDataDiv = L.DomUtil.create('div', 'splitters-data', this._canvasContainer);
+		this._cursorOverlayDiv = L.DomUtil.create('div', 'cursor-overlay', this._canvasContainer);
+		this._splittersStyleData = new CStyleData(this._splittersDataDiv);
 
 		this._painter = new L.TileSectionManager(this);
 		this._painter._addTilesSection();
 		this._painter._sectionContainer.getSectionWithName('tiles').onResize();
 		this._painter._addOverlaySection();
+		this._painter._sectionContainer.addSection(L.getNewScrollSection());
 
 		// For mobile/tablet the hammerjs swipe handler already uses a requestAnimationFrame to fire move/drag events
 		// Using L.TileSectionManager's own requestAnimationFrame loop to do the updates in that case does not perform well.
@@ -637,14 +664,13 @@ L.CanvasTileLayer = L.TileLayer.extend({
 	},
 
 	_removeSplitters: function () {
-		var map = this._map;
 		if (this._xSplitter) {
-			map.removeLayer(this._xSplitter);
+			this._canvasOverlay.removePath(this._xSplitter);
 			this._xSplitter = undefined;
 		}
 
 		if (this._ySplitter) {
-			map.removeLayer(this._ySplitter);
+			this._canvasOverlay.removePath(this._ySplitter);
 			this._ySplitter = undefined;
 		}
 	},
@@ -1522,13 +1548,21 @@ L.CanvasTileLayer = L.TileLayer.extend({
 		var map = this._map;
 
 		if (!this._xSplitter) {
-			this._xSplitter = new L.SplitterLine(
-				map, { isHoriz: true });
+			this._xSplitter = new CSplitterLine(
+				map, {
+					name: 'horiz-pane-splitter',
+					fillColor: this._splittersStyleData.getPropValue('--color'),
+					fillOpacity: this._splittersStyleData.getFloatPropValue('--opacity'),
+					thickness: Math.round(
+						this._splittersStyleData.getIntPropValue('--weight')
+						* this._painter._dpiScale),
+					isHoriz: true
+				});
 
-			map.addLayer(this._xSplitter);
+			this._canvasOverlay.initPath(this._xSplitter);
 		}
 		else {
-			this._xSplitter.update();
+			this._xSplitter.onPositionChange();
 		}
 	},
 
@@ -1537,13 +1571,21 @@ L.CanvasTileLayer = L.TileLayer.extend({
 		var map = this._map;
 
 		if (!this._ySplitter) {
-			this._ySplitter = new L.SplitterLine(
-				map, { isHoriz: false });
+			this._ySplitter = new CSplitterLine(
+				map, {
+					name: 'vert-pane-splitter',
+					fillColor: this._splittersStyleData.getPropValue('--color'),
+					fillOpacity: this._splittersStyleData.getFloatPropValue('--opacity'),
+					thickness: Math.round(
+						this._splittersStyleData.getIntPropValue('--weight')
+						* this._painter._dpiScale),
+					isHoriz: false
+				});
 
-			map.addLayer(this._ySplitter);
+			this._canvasOverlay.initPath(this._ySplitter);
 		}
 		else {
-			this._ySplitter.update();
+			this._ySplitter.onPositionChange();
 		}
 	},
 
@@ -1554,6 +1596,10 @@ L.CanvasTileLayer = L.TileLayer.extend({
 	hasYSplitter: function () {
 		return !!(this._ySplitter);
 	},
+
+	getTileSectionPos: function () {
+		return this._painter.getTileSectionPos();
+	}
 
 });
 

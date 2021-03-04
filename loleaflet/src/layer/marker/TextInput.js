@@ -506,8 +506,10 @@ L.TextInput = L.Layer.extend({
 		var top = this._map._docLayer._visibleCursor.getNorthWest();
 		var bottom = this._map._docLayer._visibleCursor.getSouthWest();
 
-		// Display caret
-		this._map.addLayer(this._map._docLayer._cursorMarker);
+		if (!this._map._docLayer._cursorMarker.isVisible()) {
+			// Display caret
+			this._map._docLayer._cursorMarker.add();
+		}
 
 		// Move and display under-caret marker
 		if (L.Browser.touch) {
@@ -528,7 +530,8 @@ L.TextInput = L.Layer.extend({
 		if (!this._map._docLayer._cursorMarker) {
 			return;
 		}
-		this._map.removeLayer(this._map._docLayer._cursorMarker);
+		if (this._map._docLayer._cursorMarker.isVisible())
+			this._map._docLayer._cursorMarker.remove();
 		this._map.removeLayer(this._cursorHandler);
 	},
 
@@ -809,7 +812,11 @@ L.TextInput = L.Layer.extend({
 
 		// avoid setting the focus keyboard
 		if (!noSelect) {
-			this._textArea.setSelectionRange(1, 1);
+			try {
+				this._textArea.setSelectionRange(1, 1);
+			} catch (err) {
+				// old firefox throws an exception on start.
+			}
 
 			if (this._hasWorkingSelectionStart === undefined)
 				this._hasWorkingSelectionStart = (this._textArea.selectionStart === 1);

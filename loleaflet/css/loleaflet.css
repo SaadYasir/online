@@ -81,11 +81,6 @@
 	z-index: 1000;
 }
 
-.scroll-container .mCSB_scrollTools.mCSB_1_scrollbar {
-	position: absolute;
-	z-index: 1000;
-}
-
 .bucket-cursor {
 	cursor: url('images/cursors/fill.png') 4 9, auto !important;/*setting coordinates to align the tip of the bucket icon */
 }
@@ -699,4 +694,10 @@ nav.spreadsheet-color-indicator ~ #sidebar-dock-wrapper {
 	--fill-opacity: 0.25;
 	--opacity: 0.25;
 	--weight: 2;
+}
+
+.leaflet-canvas-container .splitters-data {
+	--color: #e0e0e0;
+	--opacity: 1;
+	--weight: 3;
 }
