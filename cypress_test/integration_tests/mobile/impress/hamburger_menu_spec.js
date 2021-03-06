@@ -374,12 +374,12 @@ describe('Trigger hamburger menu options.', function() {
 		impressHelper.removeShapeSelection();
 
 		var preiew = '.preview-frame:nth-of-type(2) img';
-		helper.imageShouldBeFullWhiteOrNot(preiew, false);
+		helper.imageShouldNotBeFullWhite(preiew);
 
 		// Disable automatic spell checking
 		mobileHelper.selectHamburgerMenuItem(['Automatic Spell Checking']);
 
-		helper.imageShouldBeFullWhiteOrNot(preiew, true);
+		helper.imageShouldBeFullWhite(preiew);
 	});
 
 	it('Fullscreen presentation.', function() {
@@ -403,15 +403,8 @@ describe('Trigger hamburger menu options.', function() {
 			.should('exist');
 
 		// Check the version
-		if (helper.getLOVersion() === 'master') {
-			cy.contains('#lokit-version', 'LibreOffice')
-				.should('exist');
-		} else if (helper.getLOVersion() === 'cp-6-2' ||
-				   helper.getLOVersion() === 'cp-6-4')
-		{
-			cy.contains('#lokit-version', 'Collabora Office')
-				.should('exist');
-		}
+		cy.contains('#lokit-version', 'Collabora Office')
+			.should('exist');
 
 		// Close about dialog
 		cy.get('.vex-close')

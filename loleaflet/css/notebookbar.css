@@ -182,7 +182,7 @@
 	overflow-y: hidden;
 	scrollbar-width: none; /* Firefox */
 	-ms-overflow-style: none;  /* Internet Explorer 10+ */
-
+	display: block;
 	height: 84px;
 }
 
@@ -390,7 +390,7 @@ div[id*='Row'].notebookbar, div[id*='Column'].notebookbar, #SendToBack.notebookb
 	height: 24px !important;
 }
 
-#table-fontsize .select2.select2-container {
+#fontsize.notebookbar .select2.select2-container {
 	width: 60px !important;
 }
 
@@ -403,15 +403,15 @@ div[id*='Row'].notebookbar, div[id*='Column'].notebookbar, #SendToBack.notebookb
 	margin-left: 35px !important;
 }
 
-#fontnamecombobox.notebookbar ~ .select2 {
+#fontnamecombobox.notebookbar .select2 {
 	width: 150px !important;
 }
 
-#fontsizecombobox.notebookbar ~ .select2 {
+#fontsizecombobox.notebookbar .select2 {
 	width: 50px !important;
 }
 
-#applystyle.notebookbar ~ .select2 {
+#applystyle.notebookbar .select2 {
 	width: 170px !important;
 }
 
@@ -424,25 +424,60 @@ div[id*='Row'].notebookbar, div[id*='Column'].notebookbar, #SendToBack.notebookb
 	margin-left: -60px;
 }
 
-#table-stylescontainer #style1,
-#table-stylescontainer #style2,
-#table-stylescontainer #style3,
-#table-stylescontainer #style4
-{
-	border: 1px dashed lightgray;
+/* Styles preview */
+
+#stylesview {
+	height: 60px;
+	width: 400px;
+	overflow-x: hidden;
+	border: 1px dashed silver;
+	padding: 5px;
+}
+
+#stylesview .ui-iconview-entry {
+	width: 30%;
+	margin-left: 5px;
+	margin-top: 5px;
+}
+
+#stylesview .ui-iconview-icon img {
+	height: 30px;
+}
+
+#stylesview .ui-iconview-icon img:after {
+	display: block;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 30px;
+	background-color: #fff;
+	overflow: hidden;
+	white-space: nowrap;
+	text-align: center;
+	content: attr(alt);
+}
+
+#stylesview .ui-iconview-entry:not(.selected) {
+	border-radius: 3px;
+	border: 2px solid transparent;
+}
+
+#stylesview .ui-iconview-entry:hover {
+	border-radius: 3px;
+	border: 2px solid #e6e6e6b0;
 	cursor: pointer;
 }
 
-#table-stylescontainer #style4 {
-	border-right: 1px dashed transparent;
+#stylesview .ui-iconview-icon {
+	height: 35px;
 }
 
-#table-stylescontainer #style1:hover,
-#table-stylescontainer #style2:hover,
-#table-stylescontainer #style3:hover,
-#table-stylescontainer #style4:hover
-{
-	border: 1px solid lightgray;
+#stylesview .ui-iconview-text {
+	font-size: 10pt;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 /* Insert Tab */
@@ -591,7 +626,7 @@ div[id*='Row'].notebookbar, div[id*='Column'].notebookbar, #SendToBack.notebookb
 	display: none;
 }
 
-#table-numbertype .select2.select2-container {
+#numbertype .select2.select2-container {
 	width: 170px !important;
 }
 
@@ -745,23 +780,23 @@ div[id*='Row'].notebookbar, div[id*='Column'].notebookbar, #SendToBack.notebookb
 	text-align: center;
 }
 
-#style1 ~ .ui-drawing-area-placeholder-container .ui-drawing-area-placeholder {
+#style1 img ~ .ui-drawing-area-placeholder-container .ui-drawing-area-placeholder {
 	font-family: Liberation Serif;
 	font-size: 12pt;
 }
 
-#style2 ~ .ui-drawing-area-placeholder-container .ui-drawing-area-placeholder {
+#style2 img ~ .ui-drawing-area-placeholder-container .ui-drawing-area-placeholder {
 	font-family: Liberation Serif;
 	font-size: 12pt;
 }
 
-#style3 ~ .ui-drawing-area-placeholder-container .ui-drawing-area-placeholder {
+#style3 img ~ .ui-drawing-area-placeholder-container .ui-drawing-area-placeholder {
 	font-family: Liberation Sans;
 	font-size: 28pt;
 	font-weight: bold;
 }
 
-#style4 ~ .ui-drawing-area-placeholder-container .ui-drawing-area-placeholder {
+#style4 img ~ .ui-drawing-area-placeholder-container .ui-drawing-area-placeholder {
 	font-family: Liberation Sans;
 	font-size: 18pt;
 }

@@ -29,6 +29,11 @@ L.PathTransform.Handle.CursorsByType = [
 	'nesw-resize', 'ew-resize', 'nwse-resize', 'ns-resize','nesw-resize', 'ew-resize', 'nwse-resize', 'ns-resize'
 ];
 
+L.PathTransform.Handle.PolyCursorsByType = {
+	'10': 'ew-resize',
+	'8': 'ns-resize',
+	'38': 'all-scroll',
+};
 
 /**
  * @extends {L.Handler.PathTransform.Handle}
@@ -46,6 +51,42 @@ L.PathTransform.RotateHandle = L.PathTransform.Handle.extend({
 	}
 });
 
+/**
+ * @extends {L.Handler.PathTransform.Handle}
+ */
+L.PathTransform.CustomHandle = L.PathTransform.Handle.extend({
+	// transform-handler--rotate and others are defined in branding.css
+	// Until it is updated, we can use rotate as the style matches with the core
+	options: {
+		className: 'leaflet-path-transform-handler transform-handler--rotate',
+	},
+
+	onAdd: function (map) {
+		L.CircleMarker.prototype.onAdd.call(this, map);
+		if (this._path && this.options.setCursor) { // SVG/VML
+			this.setCursorType('all-scroll');
+		}
+	}
+});
+
+/**
+ * @extends {L.Handler.PathTransform.Handle}
+ */
+L.PathTransform.PolyHandle = L.PathTransform.Handle.extend({
+	options: {
+		className: 'leaflet-path-transform-handler',
+	},
+
+	onAdd: function (map) {
+		L.CircleMarker.prototype.onAdd.call(this, map);
+		if (this.options.setCursor) { // SVG/VML
+			this.setCursorType(L.PathTransform.Handle.PolyCursorsByType[
+				this.options.cursor.toString()
+			]);
+		}
+	}
+});
+
 L.Handler.PathTransform = L.Handler.extend({
 
 	options: {
@@ -54,7 +95,8 @@ L.Handler.PathTransform = L.Handler.extend({
 		scaleSouthAndEastOnly:  false,
 		uniformScaling: true,
 		maxZoom:  22,
-
+		handles: [],
+		shapeType: 0,
 		// edge handlers
 		handlerOptions: {
 			radius:      L.Browser.touch && !L.Browser.pointer ? 10 : 5,
@@ -69,17 +111,24 @@ L.Handler.PathTransform = L.Handler.extend({
 		// rectangle
 		boundsOptions: {
 			weight:    1,
-			opacity:   1,
+			opacity:   0,
 			interactive: false,
-			dashArray: [3, 3],
 			fill:      false
+		},
+
+		polyLineOptions: {
+			weight: 1,
+			opacity: 1,
+			interactive: false,
+			fill: true
 		},
 
 		// rotation handler
 		rotateHandleOptions: {
 			weight:    1,
 			opacity:   1,
-			setCursor: true
+			setCursor: true,
+			interactive: false
 		},
 		// rotation handle length
 		handleLength: L.Browser.touch && !L.Browser.pointer ? 40 : 20,
@@ -88,7 +137,9 @@ L.Handler.PathTransform = L.Handler.extend({
 		edgesCount:   4,
 
 		handleClass:       L.PathTransform.Handle,
-		rotateHandleClass: L.PathTransform.RotateHandle
+		rotateHandleClass: L.PathTransform.RotateHandle,
+		customHandleClass: L.PathTransform.CustomHandle,
+		polyHandleClass:   L.PathTransform.PolyHandle
 	},
 
 
@@ -106,7 +157,13 @@ L.Handler.PathTransform = L.Handler.extend({
 		this._activeMarker   = null;
 		this._originMarker   = null;
 		this._rotationMarker = null;
-
+		this._customMarker   = null;
+		this._customHandle   = null;
+		this._customHandlePosition = null;
+		this._polyMarker     = null;
+		this._polyMarkerPosition = null;
+		this._polyEdges      = [];
+		this._polyLine       = null;
 		// origins & temporary state
 		this._rotationOrigin   = null;
 		this._scaleOrigin      = null;
@@ -170,6 +227,11 @@ L.Handler.PathTransform = L.Handler.extend({
 
 		if (this._map.hasLayer(this._rect)) {
 			this._map.removeLayer(this._rect);
+		}
+
+		if (this._polyLine) {
+			this._map.removeLayer(this._polyLine);
+			this._polyLine = null;
 		}
 
 		this._handlersGroup = null;
@@ -359,7 +421,15 @@ L.Handler.PathTransform = L.Handler.extend({
 			this._handlersGroup.removeLayer(this._rotationMarker);
 		}
 
-		this._handleLine = this._rotationMarker = null;
+		if (this._customMarker) {
+			this._handlersGroup.removeLayer(this._customMarker);
+		}
+
+		if (this._polyLine) {
+			this._handlersGroup.removeLayer(this._polyLine);
+		}
+
+		this._handleLine = this._rotationMarker = this._polyLine = null;
 
 		for (var i = this._handlers.length - 1; i >= 0; i--) {
 			handlersGroup.removeLayer(this._handlers[i]);
@@ -480,18 +550,20 @@ L.Handler.PathTransform = L.Handler.extend({
 	},
 
 	_getPoints: function () {
-		var bounds = this._rect.getBounds(),
-		sw = bounds.getSouthWest(),
-		nw = bounds.getNorthWest(),
-		ne = bounds.getNorthEast(),
-		se = bounds.getSouthEast(),
-		center = bounds.getCenter(),
-		west   = L.latLng(center.lat, nw.lng),
-		north  = L.latLng(nw.lat, center.lng),
-		east   = L.latLng(center.lat, ne.lng),
-		south  = L.latLng(sw.lat, center.lng);
-
-		return [sw, west, nw, north, ne, east, se, south];
+		var rectangleHandles = this.options.handles['rectangle'];
+		if (rectangleHandles && rectangleHandles !== '') {
+			var nw = rectangleHandles['1'][0],
+			north = rectangleHandles['2'][0],
+			ne = rectangleHandles['3'][0],
+			west = rectangleHandles['4'][0],
+			east = rectangleHandles['5'][0],
+			sw = rectangleHandles['6'][0],
+			south = rectangleHandles['7'][0],
+			se = rectangleHandles['8'][0];
+			return [sw, west, nw, north, ne, east, se, south];
+		}
+		this.options.rotation = false;
+		return [];
 	},
 
 	_getMirroredIndex: function(type, index) {
@@ -513,17 +585,26 @@ L.Handler.PathTransform = L.Handler.extend({
 			new L.LayerGroup().addTo(map);
 		this._rect = this._rect ||
 			this._getBoundingPolygon().addTo(this._handlersGroup);
-
+		if (this.options.handles.length <= 0)
+			return;
 		if (this.options.scaling) {
 			this._handlers = [];
 			var points = this._getPoints();
 			for (var i = 0; i < points.length; i++) {
+				points[i].point = map._docLayer._convertCalcTileTwips(points[i].point);
 				this._handlers.push(
-					this._createHandler(points[i], i * 2, i)
+					this._createHandler(this._map._docLayer._twipsToLatLng(points[i].point, this._map.getZoom()), i * 2, i, this._onScaleStart)
 						.addTo(this._handlersGroup));
 			}
 		}
 
+		if (this.options.handles['custom'] !== '') {
+			this._createCustomHandlers();
+		}
+		if (this.options.handles['poly'] !== '') {
+			this._createPolyHandlers();
+			this.options.rotation = false;
+		}
 		// add bounds
 		if (this.options.rotation) {
 			//add rotation handler
@@ -537,15 +618,8 @@ L.Handler.PathTransform = L.Handler.extend({
 	*/
 	_createRotationHandlers: function() {
 		var map     = this._map;
-		var latlngs = this._rect._latlngs;
-
-		var bottom   = new L.LatLng(
-			(latlngs[0].lat + latlngs[3].lat) / 2,
-			(latlngs[0].lng + latlngs[3].lng) / 2);
-		// hehe, top is a reserved word
-		var topPoint = new L.LatLng(
-			(latlngs[1].lat + latlngs[2].lat) / 2,
-			(latlngs[1].lng + latlngs[2].lng) / 2);
+		var bottom   = map._docLayer._twipsToLatLng(this._getPoints()[7].point, this._map.getZoom());
+		var topPoint   = map._docLayer._twipsToLatLng(this._getPoints()[3].point, this._map.getZoom());
 
 		var handlerPosition = map.layerPointToLatLng(
 		L.PathTransform.pointOnLine(
@@ -570,6 +644,237 @@ L.Handler.PathTransform = L.Handler.extend({
 		this._handlers.push(this._rotationMarker);
 	},
 
+	/**
+	* Poly Handles(Lines, Connectors..), id = 9
+	*/
+	_createPolyHandlers: function() {
+		var handleList = this.options.handles['poly']['9'];
+		this._handlers = [];
+		this._polyEdges = [];
+		for (var i = 0; i < handleList.length; ++i) {
+			this._handlers.push(
+				this._createPolyHandler(handleList[i], i)
+					.addTo(this._handlersGroup));
+		}
+	},
+
+	_onPolyHandleDragStart: function(evt) {
+		var marker = evt.target;
+		var map = this._map;
+
+		this._handleDragged = false;
+		this._mapDraggingWasEnabled = false;
+		if (map.dragging.enabled()) {
+			map.dragging.disable();
+			this._mapDraggingWasEnabled = true;
+		}
+
+		this._activeMarker = marker;
+		var bottom = new L.LatLng(0,0);
+		var topPoint = new L.LatLng(0,0);
+		var latlngs = this._rect._latlngs;
+		var isEdge = this._polyEdges.indexOf(this._activeMarker.options.index);
+		if (isEdge < 0) {
+			this._originMarker = marker;
+			var middleHandlelatLngs = marker._latlng;
+			if (marker.options.cursor == 10) {
+				bottom  = new L.LatLng(
+					(latlngs[0].lat + latlngs[3].lat) / 2,
+					middleHandlelatLngs.lng);
+				topPoint = new L.LatLng(
+					(latlngs[1].lat + latlngs[2].lat) / 2,
+					middleHandlelatLngs.lng);
+			} else {
+				bottom  = new L.LatLng(
+					middleHandlelatLngs.lat,
+					(latlngs[2].lng + latlngs[3].lng) / 2);
+				topPoint = new L.LatLng(
+					middleHandlelatLngs.lat,
+					(latlngs[0].lng + latlngs[1].lng) / 2);
+			}
+			this._polyLine = new L.Polyline([topPoint, bottom],
+				this.options.polyLineOptions).addTo(this._handlersGroup);
+		}
+		else {
+			var originIndex = (this._activeMarker.options.index + 1) % this._polyEdges.length;
+			this._originMarker = this._handlers[originIndex];
+			if (this.options.shapeType == 2) { // flat line
+				this._polyLine = new L.Polyline([
+					originIndex === 0 ? this._originMarker.getLatLng() : this._activeMarker.getLatLng(),
+					originIndex === 0 ? this._activeMarker.getLatLng() : this._originMarker.getLatLng()],
+				this.options.polyLineOptions).addTo(this._handlersGroup);
+			}
+		}
+		if (this._polyLine)
+			this._map.addLayer(this._polyLine);
+
+		this._scaleOrigin  = this._originMarker.getLatLng();
+
+		this._initialMatrix = this._matrix.clone();
+		this._cachePoints();
+
+		this._activeMarker.addEventParent(this._map);
+		this._map
+			.on('mousemove', this._polyLine ? this._onPolyHandleDrag : this._onScale,    this)
+			.on('mouseup',   this._polyLine ? this._onPolyHandleDragEnd: this._onScaleEnd, this);
+		this._initialDist  = this._originMarker._point.distanceTo(this._activeMarker._point);
+		this._initialDistX = this._originMarker._point.x - this._activeMarker._point.x;
+		this._initialDistY = this._originMarker._point.y - this._activeMarker._point.y;
+
+		this._path
+			.fire('transformstart', { layer: this._path })
+			.fire('scalestart', {
+				layer: this._path,
+				scale: L.point(1, 1),
+				pos: this._activeMarker._latlng,
+				handleId: this._activeMarker.options.id
+			});
+	},
+
+	_onPolyHandleDrag: function(evt) {
+		if (!this._rect) {
+			return;
+		}
+		var direction = new L.LatLng(0,0);
+		var middleHandleCursor = 0;
+		if (this._activeMarker.options.cursor == 8) {
+			direction.lat = evt.latlng.lat;
+			direction.lng = this._activeMarker.getLatLng().lng;
+			middleHandleCursor = 8;
+		} else if (this._activeMarker.options.cursor == 10) {
+			direction.lat = this._activeMarker.getLatLng().lat;
+			direction.lng = evt.latlng.lng;
+			middleHandleCursor = 10;
+		} else {
+			direction = evt.latlng;
+		}
+		if (this._polyLine) {
+			var lineTop = this._polyLine.getLatLngs()[0];
+			var lineBottom = this._polyLine.getLatLngs()[1];
+			if (middleHandleCursor == 10) {
+				lineTop.lng = direction.lng;
+				lineBottom.lng = direction.lng;
+			} else if (middleHandleCursor == 8) {
+				lineTop.lat = direction.lat;
+				lineBottom.lat = direction.lat;
+			} else if (this.options.shapeType == 2) { // flat line
+				var handleIndex = this._activeMarker.options.index;
+				if (handleIndex == 0) {
+					lineTop = direction;
+				} else {
+					lineBottom = direction;
+				}
+			}
+			this._polyLine.setLatLngs([lineTop, lineBottom]);
+		}
+		this._activeMarker.setLatLng(direction);
+		this._activeMarker._updatePath();
+	},
+
+	_onPolyHandleDragEnd: function() {
+		if (!this._rect || !this._scaleOrigin) {
+			return;
+		}
+		this._activeMarker.removeEventParent(this._map);
+		this._map
+			.off('mousemove', this._onPolyHandleDrag,    this)
+			.off('mouseup',   this._onPolyHandleDragEnd, this);
+
+		if (this.options.rotation) {
+			this._map.addLayer(this._handleLine);
+			this._map.addLayer(this._rotationMarker);
+		}
+
+		if (this.options.handles['custom'] !== '') {
+			this._map.addLayer(this._customMarker);
+		}
+
+		this._apply();
+		this._path.fire('scaleend', {
+			layer: this._path,
+			scale: this._scale.clone(),
+			pos: this._activeMarker._latlng,
+			handleId: this._activeMarker.options.id
+		});
+
+		this._scaleOrigin = undefined;
+		this._originMarker = undefined;
+		if (this._polyLine) {
+			this._map.removeLayer(this._polyLine);
+		}
+	},
+
+	/**
+	* Custom Shape Handles, id = 22
+	*/
+	_createCustomHandlers: function() {
+		var map = this._map;
+		var handle = this.options.handles['custom']['22'][0];
+		this._customHandle = handle;
+		this._customHandlePosition = map._docLayer._twipsToLatLng(handle.point, this._map.getZoom());
+		var CustomHandleClass = this.options.customHandleClass;
+		var options = this.options.handlerOptions;
+		this._customMarker = new CustomHandleClass(this._customHandlePosition,
+			options)
+			.addTo(this._handlersGroup)
+			.on('mousedown', this._onCustomHandleDragStart, this);
+
+		this._handlers.push(this._customMarker);
+	},
+
+	_onCustomHandleDragStart: function(evt) {
+		var map = this._map;
+		this._activeMarker = evt.target;
+
+		this._handleDragged = false;
+		map._docLayer._graphicMarker.isDragged = true;
+		this._mapDraggingWasEnabled = false;
+		if (map.dragging.enabled()) {
+			map.dragging.disable();
+			this._mapDraggingWasEnabled = true;
+		}
+
+		this._customMarker.addEventParent(this._map);
+		this._path._map
+			.on('mousemove', this._onCustomHandleDrag,     this)
+			.on('mouseup',   this._onCustomHandleDragEnd,  this);
+	},
+
+	/**
+	* @param  {Event} evt
+	*/
+	_onCustomHandleDrag: function(evt) {
+		if (!this._rect) {
+			return;
+		}
+		this._handleDragged = true;
+		this._customMarker.setLatLng(evt.latlng);
+		this._customMarker._updatePath();
+	},
+
+	_onCustomHandleDragEnd: function() {
+		if (!this._rect) {
+			return;
+		}
+		var map = this._map;
+		map._docLayer._graphicMarker.isDragged = false;
+		this._customMarker.removeEventParent(this._map);
+		this._path._map
+			.off('mousemove', this._onCustomHandleDrag,     this)
+			.off('mouseup',   this._onCustomHandleDragEnd,  this);
+
+		this._path.fire('scaleend', {
+			pos: this._activeMarker._latlng,
+			handleId: this._customHandle.id
+		});
+
+		this._activeMarker = null;
+		// Set the initial position;
+		// If the final look of the shape does not change we dont get selection update
+		// In that case, marker may stay where it is placed. This fixes that.
+		this._customMarker.setLatLng(this._customHandlePosition);
+		this._customMarker._updatePath();
+	},
 
 	/**
 	* @return {L.LatLng}
@@ -599,7 +904,6 @@ L.Handler.PathTransform = L.Handler.extend({
 			map.dragging.disable();
 			this._mapDraggingWasEnabled = true;
 		}
-
 		this._originMarker     = null;
 		this._rotationOriginPt = map.latLngToLayerPoint(this._getRotationOrigin());
 		this._rotationStart    = evt.layerPoint;
@@ -704,17 +1008,23 @@ L.Handler.PathTransform = L.Handler.extend({
 		this._initialDistX = this._originMarker._point.x - this._activeMarker._point.x;
 		this._initialDistY = this._originMarker._point.y - this._activeMarker._point.y;
 
+		var index = this._activeMarker.options.index;
 		this._path
 			.fire('transformstart', { layer: this._path })
 			.fire('scalestart', {
 				layer: this._path,
 				scale: L.point(1, 1),
-				pos: this._getPoints()[this._activeMarker.options.index]
+				pos: this._activeMarker._latlng,
+				handleId: this._getPoints()[index].id
 			});
 
 		if (this.options.rotation) {
 			this._map.removeLayer(this._handleLine);
 			this._map.removeLayer(this._rotationMarker);
+		}
+
+		if (this.options.handles['custom'] !== '') {
+			this._map.removeLayer(this._customMarker);
 		}
 
 		//this._handleLine = this._rotationMarker = null;
@@ -776,26 +1086,21 @@ L.Handler.PathTransform = L.Handler.extend({
 			this._map.addLayer(this._rotationMarker);
 		}
 
-		var type;
+		if (this.options.handles['custom'] !== '') {
+			this._map.addLayer(this._customMarker);
+		}
+
 		var index = this._activeMarker.options.index;
-		if (this._scale.x < 0 && this._scale.y < 0)
-			type = 'c';
-		else if (this._scale.x < 0)
-			type = 'v';
-		else if (this._scale.y < 0)
-			type = 'h';
-
-		if (type)
-			index = this._getMirroredIndex(type, index);
-
 		this._apply();
 		this._path.fire('scaleend', {
 			layer: this._path,
 			scale: this._scale.clone(),
-			pos: this._getPoints()[index]
+			pos: this._activeMarker._latlng,
+			handleId: this._activeMarker.options.id || this._getPoints()[index].id
 		});
 
 		this._scaleOrigin = undefined;
+		this._originMarker = undefined;
 	},
 
 
@@ -828,9 +1133,10 @@ L.Handler.PathTransform = L.Handler.extend({
 	* @param  {L.LatLng} latlng
 	* @param  {Number}   type one of L.Handler.PathTransform.HandlerTypes
 	* @param  {Number}   index
+	* @param  {Function} event mousedown function
 	* @return {L.Handler.PathTransform.Handle}
 	*/
-	_createHandler: function(latlng, type, index) {
+	_createHandler: function(latlng, type, index, event) {
 		var HandleClass = this.options.handleClass;
 		var options = {
 			className: 'leaflet-drag-transform-marker drag-marker--' +
@@ -847,7 +1153,27 @@ L.Handler.PathTransform = L.Handler.extend({
 			L.Util.extend({}, this.options.handlerOptions, options)
 		);
 
-		marker.on('mousedown', this._onScaleStart, this);
+		marker.on('mousedown', event, this);
+		return marker;
+	},
+
+	_createPolyHandler: function(handle, index) {
+		var HandleClass = this.options.polyHandleClass;
+		var options = {
+			className: 'leaflet-drag-transform-marker',
+			index:     index,
+			cursor:    handle.pointer,
+			id:        handle.id,
+			kind:      handle.kind
+		};
+		if (options.cursor != 10 && options.cursor != 8) {
+			this._polyEdges.push(index);
+		}
+		var marker = new HandleClass(this._map._docLayer._twipsToLatLng(handle.point, this._map.getZoom()),
+			L.Util.extend({}, this.options.handlerOptions, options)
+		);
+
+		marker.on('mousedown', this._onPolyHandleDragStart, this);
 		return marker;
 	},
 
@@ -856,7 +1182,8 @@ L.Handler.PathTransform = L.Handler.extend({
 	* Hide(not remove) the handlers layer
 	*/
 	_hideHandlers: function() {
-		this._map.removeLayer(this._handlersGroup);
+		if (this._handlersGroup)
+			this._map.removeLayer(this._handlersGroup);
 	},
 
 
@@ -865,6 +1192,7 @@ L.Handler.PathTransform = L.Handler.extend({
 	*/
 	_onDragStart: function() {
 		this._hideHandlers();
+		this._rect.options.opacity = 1;
 		this._map.addLayer(this._rect);
 	},
 

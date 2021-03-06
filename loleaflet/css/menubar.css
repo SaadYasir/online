@@ -71,7 +71,7 @@
 }
 .main-nav.hasnotebookbar:not(.readonly) {
 	background: var(--gray-bg-color);
-	margin-top: 0px;
+	margin: 0px;
 }
 
 /* Customizations to sm-simple theme to make it look like LO menu, lo-menu class */
@@ -286,6 +286,13 @@
 
 .impress-icon-img {
 	background-image: url('images/x-office-presentation.svg');
+	background-size: 30px 30px;
+	background-repeat: no-repeat;
+	background-position: bottom;
+}
+
+.draw-icon-img {
+	background-image: url('images/x-office-drawing.svg');
 	background-size: 30px 30px;
 	background-repeat: no-repeat;
 	background-position: bottom;

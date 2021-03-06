@@ -280,7 +280,7 @@ p.mobile-wizard.ui-combobox-text.selected {
 	z-index: 2;
 }
 
-.ui-content.mobile-wizard {
+.ui-content.mobile-wizard:not(.unotoolbutton) {
 	background-color: white !important;
 	border: none !important;
 	padding: 0px 0px 16px;
@@ -859,7 +859,20 @@ div#mobile-wizard-content .spinfieldcontainer .spinfieldimage.disabled {
 input[type='checkbox']#UseBandingColumnStyle, input[type='checkbox']#UseLastColumnStyle, input[type='checkbox']#UseFirstColumnStyle, input[type='checkbox']#UseBandingRowStyle, input[type='checkbox']#UseLastRowStyle, input[type='checkbox']#UseFirstRowStyle{
 	margin-right: 0px !important;
 }
-#mobile-wizard button{
+#mobile-wizard #FontworkSameLetterHeights {
+	display: flex;
+	padding: 0px;
+	align-items: center;
+}
+#mobile-wizard #FontworkSameLetterHeights > * {
+	flex: 1 auto;
+	color: white;
+}
+#mobile-wizard #FontworkSameLetterHeights > img {
+	filter: brightness(3);
+}
+#mobile-wizard button,
+#mobile-wizard #FontworkSameLetterHeights {
 	height: 44px;
 	width: 92%;
 	border-radius: 4px;
@@ -868,6 +881,7 @@ input[type='checkbox']#UseBandingColumnStyle, input[type='checkbox']#UseLastColu
 	background-color: #0b87e7;
 	border: 1px solid #0b87e7;
 	margin: 5px 4%;
+	font-size: 13px;
 }
 #mobile-wizard button:focus{
 	outline: none;
@@ -951,4 +965,37 @@ input[type='checkbox'][disabled] {
 
 #TableEditPanel #misc_label.mobile-wizard {
 	display: none;
+}
+
+/* Fontwork property panel */
+#ExtrusionToggle.mobile-wizard {
+	display: inline-table
+}
+
+#FontworkShapeType-fontwork-plain-text, #FontworkShapeType-fontwork-wave, #FontworkShapeType-fontwork-inflate, #FontworkShapeType-fontwork-stop, #FontworkShapeType-fontwork-curve-up, #FontworkShapeType-fontwork-curve-down, #FontworkShapeType-fontwork-triangle-up, #FontworkShapeType-fontwork-triangle-down, #FontworkShapeType-fontwork-fade-right, #FontworkShapeType-fontwork-fade-left, #FontworkShapeType-fontwork-fade-up, #FontworkShapeType-fontwork-fade-down, #FontworkShapeType-fontwork-slant-up, #FontworkShapeType-fontwork-slant-down, #FontworkShapeType-fontwork-fade-up-and-right, #FontworkShapeType-fontwork-fade-up-and-left, #FontworkShapeType-fontwork-chevron-up, #FontworkShapeType-fontwork-chevron-down, #FontworkShapeType-fontwork-arch-up-curve, #FontworkShapeType-fontwork-arch-down-curve, #FontworkShapeType-fontwork-arch-left-curve, #FontworkShapeType-fontwork-arch-right-curve, #FontworkShapeType-fontwork-circle-curve, #FontworkShapeType-fontwork-open-circle-curve, #FontworkShapeType-fontwork-arch-up-pour, #FontworkShapeType-fontwork-arch-down-pour, #FontworkShapeType-fontwork-arch-right-pour, #FontworkShapeType-fontwork-circle-pour, #FontworkShapeType-fontwork-open-circle-pour
+{
+	padding: 16px 28px 16px 4% !important;
+	margin: 0px !important;
+	float: left;
+	width: 20%;
+}
+
+#fontworkproperties + .ui-content {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+}
+
+#fontworkproperties + .ui-content > div {
+	margin: 0 !important;
+	padding: 0 !important;
+	flex: 1 30%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+#fontworkproperties + .ui-content > div > * {
+	flex: 1 44px;
+	text-align: center;
 }

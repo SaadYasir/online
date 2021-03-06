@@ -9,6 +9,7 @@ L.Control.MobileWizard = L.Control.extend({
 		maxHeight: '45%'
 	},
 
+	_builder: null,
 	_inMainMenu: true,
 	_isActive: false,
 	_inBuilding: false,
@@ -35,8 +36,20 @@ L.Control.MobileWizard = L.Control.extend({
 		map.on('showwizardsidebar', this._showWizardSidebar, this);
 		map.on('mobilewizardback', this.goLevelUp, this);
 		map.on('resize', this._onResize, this);
+		map.on('jsdialogupdate', this.onJSUpdate, this);
+		map.on('jsdialogaction', this.onJSAction, this);
 
 		this._setupBackButton();
+	},
+
+	onRemove: function() {
+		this.map.off('mobilewizard', this._onMobileWizard, this);
+		this.map.off('closemobilewizard', this._hideWizard, this);
+		this.map.off('showwizardsidebar', this._showWizardSidebar, this);
+		this.map.off('mobilewizardback', this.goLevelUp, this);
+		this.map.off('resize', this._onResize, this);
+		this.map.off('jsdialogupdate', this.onJSUpdate, this);
+		this.map.off('jsdialogaction', this.onJSAction, this);
 	},
 
 	_reset: function() {
@@ -339,6 +352,9 @@ L.Control.MobileWizard = L.Control.extend({
 
 	_onMobileWizard: function(data) {
 		if (data) {
+			if (data.jsontype === 'autofilter' && (data.visible === 'false' || data.visible === false))
+				return;
+
 			this._inBuilding = true;
 
 			var isSidebar = (data.children && data.children.length >= 1 &&
@@ -397,8 +413,8 @@ L.Control.MobileWizard = L.Control.extend({
 				history.pushState({context: 'mobile-wizard', level: 0}, 'mobile-wizard-level-0');
 			}
 
-			var builder = L.control.mobileWizardBuilder({mobileWizard: this, map: this.map, cssClass: 'mobile-wizard'});
-			builder.build(this.content.get(0), [data]);
+			this._builder = L.control.mobileWizardBuilder({windowId: data.id, mobileWizard: this, map: this.map, cssClass: 'mobile-wizard'});
+			this._builder.build(this.content.get(0), [data]);
 
 			this._mainTitle = data.text ? data.text : '';
 			this._setTitle(this._mainTitle);
@@ -513,6 +529,62 @@ L.Control.MobileWizard = L.Control.extend({
 				}
 			}
 		}
+	},
+
+	onJSUpdate: function (e) {
+		var data = e.data;
+
+		if (data.jsontype === 'notebookbar')
+			return;
+
+		if (data.id !== window.mobileDialogId)
+			return;
+
+		var container = this.content.get(0);
+		if (!container)
+			return;
+
+		var control = container.querySelector('#' + data.control.id);
+		if (!control) {
+			console.warn('jsdialogupdate: not found control with id: "' + data.control.id + '"');
+			return;
+		}
+
+		var parent = control.parentNode;
+		if (!parent)
+			return;
+
+		var scrollTop = control.scrollTop;
+
+		control.style.visibility = 'hidden';
+		if (!this._builder)
+			return;
+
+		var temporaryParent = L.DomUtil.create('div');
+		this._builder.build(temporaryParent, [data.control], false);
+		parent.insertBefore(temporaryParent.firstChild, control.nextSibling);
+		L.DomUtil.remove(control);
+
+		var newControl = container.querySelector('#' + data.control.id);
+		newControl.scrollTop = scrollTop;
+
+		// avoid scrolling when adding new bigger elements to the view
+		$('#mobile-wizard-content').animate({ scrollTop: this._currentScrollPosition }, 0);
+	},
+
+	onJSAction: function (e) {
+		var data = e.data;
+
+		if (data.jsontype === 'notebookbar')
+			return;
+
+		if (!this._builder)
+			return;
+
+		if (!this.content.get(0))
+			return;
+
+		this._builder.executeAction(this.content.get(0), data.data);
 	},
 });
 

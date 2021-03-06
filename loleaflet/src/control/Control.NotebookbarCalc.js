@@ -294,6 +294,37 @@ L.Control.NotebookbarCalc = L.Control.NotebookbarWriter.extend({
 																							]
 																						}
 																					]
+																				},
+																				{
+																					'id': 'saveas-Section',
+																					'type': 'container',
+																					'text': '',
+																					'enabled': 'true',
+																					'vertical': 'true',
+																					'children': [
+																						{
+																							'id': 'saveas-Section1',
+																							'type': 'container',
+																							'text': '',
+																							'enabled': 'true',
+																							'children': [
+																								{
+																									'id': 'Section9',
+																									'type': 'toolbox',
+																									'text': '',
+																									'enabled': 'true',
+																									'children': [
+																										{
+																											'id': 'downloadas-csv',
+																											'type': 'menubartoolitem',
+																											'text': _('CSV File (.csv)'),
+																											'command': ''
+																										}
+																									]
+																								}
+																							]
+																						}
+																					]
 																				}
 																			]
 																		}
@@ -2268,6 +2299,28 @@ L.Control.NotebookbarCalc = L.Control.NotebookbarWriter.extend({
 																							'type': 'bigtoolitem',
 																							'text': _UNO('.uno:InsertObjectChart'),
 																							'command': '.uno:InsertObjectChart'
+																						}
+																					]
+																				}
+																			],
+																			'vertical': 'false'
+																		},
+																		{
+																			'id': 'Insert-Section-Fontwork',
+																			'type': 'container',
+																			'text': '',
+																			'enabled': 'true',
+																			'children': [
+																				{
+																					'id': 'SectionBottom656',
+																					'type': 'toolbox',
+																					'text': '',
+																					'enabled': 'true',
+																					'children': [
+																						{
+																							'type': 'bigtoolitem',
+																							'text': _UNO('.uno:FontworkGalleryFloater'),
+																							'command': '.uno:FontworkGalleryFloater'
 																						}
 																					]
 																				}

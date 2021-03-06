@@ -51,6 +51,9 @@ L.Map = L.Evented.extend({
 	// Control.LokDialog instance, is set in Control.UIManager.js
 	dialog: null,
 
+	// Control.JSDialog instance, is set in Control.UIManager.js
+	jsdialog: null,
+
 	context: {context: ''},
 
 	lastActiveTime: Date.now(),
@@ -743,6 +746,10 @@ L.Map = L.Evented.extend({
 
 	// public methods for getting map state
 
+	hasInfoForView: function(viewid)  {
+		return (viewid in this._viewInfo);
+	},
+
 	getViewName: function(viewid) {
 		return this._viewInfo[viewid].username;
 	},
@@ -1288,7 +1295,7 @@ L.Map = L.Evented.extend({
 	},
 
 	showCalcInputBar: function(deckOffset) {
-		if (this.dialog._calcInputBar && !this.dialog._calcInputBar.isPainting) {
+		if (this.dialog && this.dialog._calcInputBar && !this.dialog._calcInputBar.isPainting) {
 			var id = this.dialog._calcInputBar.id;
 			var calcInputbar = L.DomUtil.get('calc-inputbar');
 			if (calcInputbar) {

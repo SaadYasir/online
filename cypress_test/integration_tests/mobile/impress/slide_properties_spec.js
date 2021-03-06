@@ -22,7 +22,10 @@ describe('Changing slide properties.', function() {
 
 	function previewShouldBeFullWhite(fullWhite = true, slideNumber = 1) {
 		var selector = '.preview-frame:nth-of-type(' + (slideNumber + 1).toString() + ') img';
-		helper.imageShouldBeFullWhiteOrNot(selector, fullWhite);
+		if (fullWhite)
+			helper.imageShouldBeFullWhite(selector);
+		else
+			helper.imageShouldNotBeFullWhite(selector);
 	}
 
 	function switchToMasterView() {
@@ -420,7 +423,7 @@ describe('Changing slide properties.', function() {
 		switchToMasterView();
 
 		cy.get('#masterslide')
-			.should('have.class', 'disabled');
+			.should('not.exist');
 
 		cy.get('#displaymasterbackground label')
 			.should('have.class', 'disabled');
@@ -436,7 +439,7 @@ describe('Changing slide properties.', function() {
 			.should('exist');
 
 		cy.get('#masterslide')
-			.should('have.class', 'disabled');
+			.should('not.exist');
 
 		cy.get('#displaymasterbackground label')
 			.should('have.class', 'disabled');
@@ -453,7 +456,7 @@ describe('Changing slide properties.', function() {
 		previewShouldBeFullWhite();
 
 		cy.get('#masterslide')
-			.should('not.have.class', 'disabled');
+			.should('exist');
 
 		cy.get('#displaymasterbackground label')
 			.should('not.have.class', 'disabled');

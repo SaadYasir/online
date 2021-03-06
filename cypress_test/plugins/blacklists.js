@@ -1,20 +1,3 @@
-var coreBlackLists = {
-	'master': [
-	],
-
-	'cp-6-4': [
-	],
-
-	'cp-6-2': [
-		['mobile/impress/apply_font_spec.js',
-			[]
-		],
-		['mobile/impress/apply_paragraph_props_spec.js',
-			[]
-		],
-	]
-};
-
 var nextcloudBlackList = [
 	['mobile/writer/focus_spec.js', []],
 	['mobile/calc/focus_spec.js', []],
@@ -56,6 +39,12 @@ var nextcloudBlackList = [
 	['desktop/writer/top_toolbar_spec.js',
 		[
 			'Insert image.',
+			'Save.',
+			'Print'
+		]
+	],
+	['desktop/calc/top_toolbar_spec.js',
+		[
 			'Save.',
 			'Print'
 		]
@@ -156,6 +145,11 @@ var phpProxyBlackList = [
 			'Save.'
 		]
 	],
+	['desktop/calc/top_toolbar_spec.js',
+		[
+			'Save.'
+		]
+	],
 	['multiuser/calc/sheet_operations_user1_spec.js',
 		[]
 	],
@@ -200,7 +194,6 @@ var nextcloudOnlyList = [
 	['mobile/impress/nextcloud_spec.js', []],
 ];
 
-module.exports.coreBlackLists = coreBlackLists;
 module.exports.nextcloudBlackList = nextcloudBlackList;
 module.exports.nextcloudOnlyList = nextcloudOnlyList;
 module.exports.phpProxyBlackList = phpProxyBlackList;

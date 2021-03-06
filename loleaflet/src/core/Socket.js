@@ -206,7 +206,9 @@ L.Socket = L.Class.extend({
 		}
 		if (window.isLocalStorageAllowed) {
 			var spellOnline = window.localStorage.getItem('SpellOnline');
-			msg += ' spellOnline=' +  spellOnline;
+			if (spellOnline) {
+				msg += ' spellOnline=' + spellOnline;
+			}
 		}
 
 		this._doSend(msg);
@@ -424,7 +426,7 @@ L.Socket = L.Class.extend({
 				postMsgData['Reason'] = 'DocumentDisconnected';
 			}
 			else if (textMsg === 'recycling') {
-				msg = _('Server is recycling and will be available shortly');
+				msg = _('Server is down, restarting automatically. Please wait.');
 				this._map._active = false;
 				this._map._serverRecycling = true;
 
@@ -906,6 +908,9 @@ L.Socket = L.Class.extend({
 		else if (textMsg.startsWith('jsdialog:')) {
 			this._onJSDialog(textMsg);
 		}
+		else if (textMsg.startsWith('hyperlinkclicked:')) {
+			this._onHyperlinkClickedMsg(textMsg);
+		}
 
 		var msgDelayed = false;
 		if (!this._isReady() || !this._map._docLayer || this._delayedMessages.length || this._handlingDelayedMessages) {
@@ -1074,6 +1079,19 @@ L.Socket = L.Class.extend({
 			return;
 		}
 
+		if (msgData.action) {
+			switch (msgData.action) {
+			case 'update':
+				this._map.fire('jsdialogupdate', {data: msgData});
+				return;
+
+			case 'action':
+				this._map.fire('jsdialogaction', {data: msgData});
+				return;
+			}
+		}
+
+		// re/create
 		if (window.mode.isMobile()) {
 			if (msgData.type == 'borderwindow')
 				return;
@@ -1086,15 +1104,31 @@ L.Socket = L.Class.extend({
 			this._map.fire('autofilterdropdown', msgData);
 		} else if (msgData.jsontype === 'dialog') {
 			this._map.fire('jsdialog', {data: msgData});
-		} else if (msgData.jsontype === 'notebookbar' || msgData.type === 'borderwindow') {
-			window.notebookbarId = msgData.id;
+		} else if (msgData.jsontype === 'notebookbar') {
 			for (var i = 0; i < msgData.children.length; i++) {
 				if (msgData.children[i].type === 'control') {
+					msgData.children[i].id = msgData.id;
 					this._map.fire('notebookbar', msgData.children[i]);
 					return;
 				}
 			}
 		}
+	},
+
+	_onHyperlinkClickedMsg: function (textMsg) {
+		var link = null;
+		var coords = null;
+		var hyperlinkMsgStart = 'hyperlinkclicked: ';
+		var coordinatesMsgStart = ' coordinates: ';
+
+		if (textMsg.indexOf(coordinatesMsgStart) !== -1) {
+			var coordpos = textMsg.indexOf(coordinatesMsgStart);
+			link = textMsg.substring(hyperlinkMsgStart.length, coordpos);
+			coords = textMsg.substring(coordpos+coordinatesMsgStart.length);
+		} else
+			link = textMsg.substring(hyperlinkMsgStart.length);
+
+		this._map.fire('hyperlinkclicked', {url: link, coordinates: coords});
 	},
 
 	_onSocketError: function () {

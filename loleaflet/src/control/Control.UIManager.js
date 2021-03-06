@@ -4,7 +4,7 @@
                          and allows to controll them (show/hide)
  */
 
-/* global $ setupToolbar w2ui w2utils */
+/* global $ setupToolbar w2ui w2utils toolbarUpMobileItems _ */
 L.Control.UIManager = L.Control.extend({
 	mobileWizard: null,
 
@@ -44,7 +44,8 @@ L.Control.UIManager = L.Control.extend({
 			this.map.addControl(L.control.signingBar());
 			this.map.addControl(L.control.statusBar());
 
-			this.map.addControl(L.control.jsDialog());
+			this.map.jsdialog = L.control.jsDialog();
+			this.map.addControl(this.map.jsdialog);
 		}
 
 		setupToolbar(this.map);
@@ -88,6 +89,8 @@ L.Control.UIManager = L.Control.extend({
 				var notebookbar = L.control.notebookbarCalc();
 			} else if (docType === 'presentation') {
 				notebookbar = L.control.notebookbarImpress();
+			} else if (docType === 'drawing') {
+				notebookbar = L.control.notebookbarDraw();
 			} else {
 				notebookbar = L.control.notebookbarWriter();
 			}
@@ -106,7 +109,7 @@ L.Control.UIManager = L.Control.extend({
 			L.DomUtil.remove(L.DomUtil.get('presentation-controls-wrapper'));
 		}
 
-		if (docType === 'presentation') {
+		if (this.map.isPresentationOrDrawing()) {
 			// remove unused elements
 			L.DomUtil.remove(L.DomUtil.get('spreadsheet-row-column-frame'));
 			L.DomUtil.remove(L.DomUtil.get('spreadsheet-toolbar'));
@@ -125,7 +128,7 @@ L.Control.UIManager = L.Control.extend({
 			}
 		}
 
-		if (docType === 'presentation' && (isDesktop || window.mode.isTablet())) {
+		if (this.map.isPresentationOrDrawing() && (isDesktop || window.mode.isTablet())) {
 			this.map.addControl(L.control.presentationBar());
 		}
 
@@ -134,6 +137,82 @@ L.Control.UIManager = L.Control.extend({
 				w2ui['editbar'].refresh();
 			});
 		}
+	},
+
+	// UI modification
+
+	insertButtonToClassicToolbar: function(button) {
+		if (!w2ui['editbar'].get(button.id)) {
+			if (this.map.isPermissionEdit()) {
+				// add the css rule for the image
+				var style = $('html > head > style');
+				if (style.length == 0)
+					$('html > head').append('<style/>');
+				$('html > head > style').append('.w2ui-icon.' + button.id + '{background: url(' + button.imgurl + ') no-repeat center !important; }');
+
+				// Position: Either specified by the caller, or defaulting to first position (before save)
+				var insertBefore = button.insertBefore || 'save';
+				// add the item to the toolbar
+				w2ui['editbar'].insert(insertBefore, [
+					{
+						type: 'button',
+						uno: button.unoCommand,
+						id: button.id,
+						img: button.id,
+						hint: _(button.hint), /* "Try" to localize ! */
+						/* Notify the host back when button is clicked (only when unoCommand is not set) */
+						postmessage: !button.hasOwnProperty('unoCommand')
+					}
+				]);
+				if (button.mobile)
+				{
+					// Add to our list of items to preserve when in mobile mode
+					// FIXME: Wrap the toolbar in a class so that we don't make use
+					// global variables and functions like this
+					var idx = toolbarUpMobileItems.indexOf(insertBefore);
+					toolbarUpMobileItems.splice(idx, 0, button.id);
+				}
+			}
+			else if (this.map.isPermissionReadOnly()) {
+				// Just add a menu entry for it
+				this.map.fire('addmenu', {id: button.id, label: button.hint});
+			}
+		}
+	},
+
+	insertButton: function(button) {
+		if (!this.notebookbar)
+			this.insertButtonToClassicToolbar(button);
+		else
+			this.notebookbar.insertButtonToShortcuts(button);
+	},
+
+	showButtonInClassicToolbar: function(buttonId, show) {
+		var toolbars = [w2ui['toolbar-up'], w2ui['actionbar'], w2ui['editbar']];
+		var found = false;
+
+		toolbars.forEach(function(toolbar) {
+			if (toolbar && toolbar.get(buttonId)) {
+				found = true;
+				if (show) {
+					toolbar.show(buttonId);
+				} else {
+					toolbar.hide(buttonId);
+				}
+			}
+		});
+
+		if (!found) {
+			console.error('Toolbar button with id "' + buttonId + '" not found.');
+			return;
+		}
+	},
+
+	showButton: function(buttonId, show) {
+		if (!this.notebookbar)
+			this.showButtonInClassicToolbar(buttonId, show);
+		else
+			this.notebookbar.showShortcutsButton(buttonId, show);
 	},
 
 	// Menubar

@@ -198,6 +198,10 @@ L.TextInput = L.Layer.extend({
 		// to pop-up), unless the document is read only.
 		if (!this._map.isPermissionEdit()) {
 			this._setAcceptInput(false);
+			// on clicking focus is important
+			// specially in chrome once document loses focus it never gets it back
+			// which causes shortcuts to stop working (i.e: print, search etc...)
+			this._map.getContainer().focus();
 			return;
 		}
 
@@ -805,7 +809,11 @@ L.TextInput = L.Layer.extend({
 
 		// avoid setting the focus keyboard
 		if (!noSelect) {
-			this._textArea.setSelectionRange(1, 1);
+			try {
+				this._textArea.setSelectionRange(1, 1);
+			} catch (err) {
+				// old firefox throws an exception on start.
+			}
 
 			if (this._hasWorkingSelectionStart === undefined)
 				this._hasWorkingSelectionStart = (this._textArea.selectionStart === 1);

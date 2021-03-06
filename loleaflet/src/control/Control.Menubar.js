@@ -78,6 +78,7 @@ L.Control.Menubar = L.Control.extend({
 				{name: _UNO('.uno:InsertGraphic', 'text'), id: 'insertgraphicremote', type: 'action'},
 				{name: _UNO('.uno:InsertAnnotation', 'text'), id: 'insertcomment', type: 'action'},
 				{uno: '.uno:InsertObjectChart'},
+				{name: _UNO('.uno:FontworkGalleryFloater'), uno: '.uno:FontworkGalleryFloater'},
 				{type: 'separator'},
 				{uno: '.uno:InsertSection', id: 'insertsection'},
 				{name: _UNO('.uno:InsertField', 'text'), type: 'menu', menu: [
@@ -268,10 +269,9 @@ L.Control.Menubar = L.Control.extend({
 				{name: _('See revision history'), id: 'rev-history', type: 'action'},
 				{name: !window.ThisIsAMobileApp ? _('Download as') : _('Export as'), id: 'downloadas', type: 'menu', menu: [
 					{name: _('PDF Document (.pdf)'), id: 'downloadas-pdf', type: 'action'},
-					{name: _('ODF presentation (.odp)'), id: 'downloadas-odp', type: 'action', drawing: false},
-					{name: _('PowerPoint 2003 Presentation (.ppt)'), id: 'downloadas-ppt', type: 'action', drawing: false},
-					{name: _('PowerPoint Presentation (.pptx)'), id: 'downloadas-pptx', type: 'action', drawing: false},
-					{name: _('ODF Drawing (.odg)'), id: 'downloadas-odg', type: 'action'}
+					{name: _('ODF presentation (.odp)'), id: 'downloadas-odp', type: 'action'},
+					{name: _('PowerPoint 2003 Presentation (.ppt)'), id: 'downloadas-ppt', type: 'action'},
+					{name: _('PowerPoint Presentation (.pptx)'), id: 'downloadas-pptx', type: 'action'},
 				]},
 				{type: 'separator'},
 				{name: _UNO('.uno:Print', 'presentation'), id: 'print', type: 'action'},
@@ -295,15 +295,15 @@ L.Control.Menubar = L.Control.extend({
 				{name: _UNO('.uno:ZoomPlus', 'presentation'), id: 'zoomin', type: 'action'},
 				{name: _UNO('.uno:ZoomMinus', 'presentation'), id: 'zoomout', type: 'action'},
 				{name: _('Reset zoom'), id: 'zoomreset', type: 'action'},
-				{type: 'separator', drawing: false},
-				{uno: '.uno:SlideMasterPage', drawing: false},
-				{type: 'separator', drawing: false},
-				{uno: '.uno:ModifyPage', drawing: false},
-				{uno: '.uno:SlideChangeWindow', drawing: false},
-				{uno: '.uno:CustomAnimation', drawing: false},
-				{uno: '.uno:MasterSlidesPanel', drawing: false},
-				{type: 'separator', drawing: false},
-				{uno: '.uno:Sidebar', drawing: false},
+				{type: 'separator'},
+				{uno: '.uno:SlideMasterPage'},
+				{type: 'separator'},
+				{uno: '.uno:ModifyPage'},
+				{uno: '.uno:SlideChangeWindow'},
+				{uno: '.uno:CustomAnimation'},
+				{uno: '.uno:MasterSlidesPanel'},
+				{type: 'separator'},
+				{uno: '.uno:Sidebar'},
 				{name: _('Show Status Bar'), id: 'showstatusbar', type: 'action'}]
 			},
 			{name: _UNO('.uno:InsertMenu', 'presentation'), id: 'insert', type: 'menu', menu: [
@@ -312,6 +312,7 @@ L.Control.Menubar = L.Control.extend({
 				{name: _UNO('.uno:SelectBackground', 'presentation'), id: 'selectbackground', type: 'action'},
 				{name: _UNO('.uno:InsertAnnotation', 'presentation'), id: 'insertcomment', type: 'action'},
 				{uno: '.uno:InsertObjectChart'},
+				{name: _UNO('.uno:FontworkGalleryFloater'), uno: '.uno:FontworkGalleryFloater'},
 				{type: 'separator'},
 				{name: _UNO('.uno:HyperlinkDialog'), id: 'inserthyperlink', type: 'action'},
 				{type: 'separator'},
@@ -384,6 +385,118 @@ L.Control.Menubar = L.Control.extend({
 			{name: _('Last modification'), id: 'last-mod', type: 'action', tablet: false}
 		],
 
+		drawing: [
+			{name: _UNO('.uno:PickList', 'presentation'), id: 'file', type: 'menu', menu: [
+				{name: _UNO('.uno:Save', 'presentation'), id: 'save', type: 'action'},
+				{name: _UNO('.uno:SaveAs', 'presentation'), id: 'saveas', type: 'action'},
+				{name: _('Save Comments'), id: 'savecomments', type: 'action'},
+				{name: _('Share...'), id:'shareas', type: 'action'},
+				{name: _UNO('.uno:Print', 'presentation'), id: 'print', type: 'action'},
+				{name: _('See revision history'), id: 'rev-history', type: 'action'},
+				{name: !window.ThisIsAMobileApp ? _('Download as') : _('Export as'), id: 'downloadas', type: 'menu', menu: [
+					{name: _('PDF Document (.pdf)'), id: 'downloadas-pdf', type: 'action'},
+					{name: _('ODF Drawing (.odg)'), id: 'downloadas-odg', type: 'action'}
+				]},
+				{type: 'separator'},
+				{name: _('Close document'), id: 'closedocument', type: 'action'}
+			]},
+			{name: _UNO('.uno:EditMenu', 'presentation'), id: 'editmenu', type: 'menu', menu: [
+				{uno: '.uno:Undo'},
+				{uno: '.uno:Redo'},
+				{name: _('Repair'), id: 'repair',  type: 'action'},
+				{type: 'separator'},
+				{uno: '.uno:Cut'},
+				{uno: '.uno:Copy'},
+				{uno: '.uno:Paste'},
+				{uno: '.uno:SelectAll'},
+				{type: 'separator'},
+				{uno: '.uno:SearchDialog'}
+			]},
+			{name: _UNO('.uno:ViewMenu', 'presentation'), id: 'view', type: 'menu', menu: [
+				{name: _UNO('.uno:FullScreen', 'presentation'), id: 'fullscreen', type: 'action'},
+				{type: 'separator'},
+				{name: _UNO('.uno:ZoomPlus', 'presentation'), id: 'zoomin', type: 'action'},
+				{name: _UNO('.uno:ZoomMinus', 'presentation'), id: 'zoomout', type: 'action'},
+				{name: _('Reset zoom'), id: 'zoomreset', type: 'action'},
+				{type: 'separator'},
+				{uno: '.uno:Sidebar'},
+				{name: _('Show Status Bar'), id: 'showstatusbar', type: 'action'}
+			]},
+			{name: _UNO('.uno:InsertMenu', 'presentation'), id: 'insert', type: 'menu', menu: [
+				{name: _('Local Image...'), id: 'insertgraphic', type: 'action'},
+				{name: _UNO('.uno:InsertGraphic', 'presentation'), id: 'insertgraphicremote', type: 'action'},
+				{name: _UNO('.uno:SelectBackground', 'presentation'), id: 'selectbackground', type: 'action'},
+				{name: _UNO('.uno:InsertAnnotation', 'presentation'), id: 'insertcomment', type: 'action'},
+				{uno: '.uno:InsertObjectChart'},
+				{type: 'separator'},
+				{name: _UNO('.uno:HyperlinkDialog'), id: 'inserthyperlink', type: 'action'},
+				{type: 'separator'},
+				{uno: '.uno:InsertSymbol'},
+				{type: 'separator'},
+				{uno: '.uno:HeaderAndFooter'},
+				{type: 'separator'},
+				{name: _UNO('.uno:InsertField', 'text'), id: 'insertfield', type: 'menu', menu: [
+					{uno: '.uno:InsertDateFieldFix'},
+					{uno: '.uno:InsertDateFieldVar'},
+					{uno: '.uno:InsertTimeFieldFix'},
+					{uno: '.uno:InsertTimeFieldVar'},
+					{type: 'separator'},
+					{name: _UNO('.uno:InsertSlideField', 'presentation'), id: 'insertslidefield', type: 'action'},
+					{name: _UNO('.uno:InsertSlideTitleField', 'presentation'), id: 'insertslidetitlefield', type: 'action'},
+					{name: _UNO('.uno:InsertSlidesField', 'presentation'), id: 'insertslidesfield', type: 'action'},
+				]},
+			]},
+			{name: _UNO('.uno:FormatMenu', 'presentation'), id: 'format', type: 'menu', menu: [
+				{uno: '.uno:FontDialog'},
+				{uno: '.uno:ParagraphDialog'},
+				{uno: '.uno:PageSetup'},
+				{type: 'separator'},
+				{uno: '.uno:TransformDialog'},
+				{uno: '.uno:FormatLine'},
+				{uno: '.uno:FormatArea'},
+				{type: 'separator'},
+				{uno: '.uno:OutlineBullet'}]
+			},
+			{name: _UNO('.uno:TableMenu', 'text'/*HACK should be 'presentation', but not in xcu*/), type: 'menu', menu: [
+				{name: _UNO('.uno:InsertTable', 'text'), uno: '.uno:InsertTable'},
+				{name: _UNO('.uno:TableInsertMenu', 'text'/*HACK should be 'presentation', but not in xcu*/), type: 'menu', menu: [
+					{uno: '.uno:InsertRowsBefore'},
+					{uno: '.uno:InsertRowsAfter'},
+					{type: 'separator'},
+					{uno: '.uno:InsertColumnsBefore'},
+					{uno: '.uno:InsertColumnsAfter'}]},
+				{name: _UNO('.uno:TableDeleteMenu', 'text'/*HACK should be 'presentation', but not in xcu*/), type: 'menu', menu: [
+					{uno: '.uno:DeleteRows'},
+					{uno: '.uno:DeleteColumns'},
+					{uno: '.uno:DeleteTable'}]},
+				{name: _UNO('.uno:TableSelectMenu', 'text'), type: 'menu', menu: [
+					{uno: '.uno:SelectTable'},
+					{uno: '.uno:EntireRow'},
+					{uno: '.uno:EntireColumn'}]},
+				{uno: '.uno:MergeCells'},
+				{uno: '.uno:TableDialog'}]
+			},
+			{name: _UNO('.uno:PageMenu', 'presentation'), type: 'menu', menu: [
+				{name: _UNO('.uno:InsertPage', 'presentation'), id: 'insertpage', type: 'action'},
+				{name: _UNO('.uno:DuplicatePage', 'presentation'), id: 'duplicatedrawpage', type: 'action'},
+				{name: _UNO('.uno:DeletePage', 'presentation'), id: 'deletepage', type: 'action'}]
+			},
+			{name: _UNO('.uno:ToolsMenu', 'presentation'), id: 'tools', type: 'menu', menu: [
+				{uno: '.uno:SpellDialog'},
+				{uno: '.uno:SpellOnline'},
+				{name: _UNO('.uno:LanguageMenu'), type: 'menu', menu: [
+					{name: _('None (Do not check spelling)'), id: 'nonelanguage', uno: '.uno:LanguageStatus?Language:string=Default_LANGUAGE_NONE'}]}
+			]},
+			{name: _UNO('.uno:HelpMenu', 'presentation'), id: 'help', type: 'menu', menu: [
+				{name: _('Online Help'), id: 'online-help', type: 'action', iosapp: false},
+				{name: _('Keyboard shortcuts'), id: 'keyboard-shortcuts', type: 'action', iosapp: false},
+				{name: _('Report an issue'), id: 'report-an-issue', type: 'action', iosapp: false},
+				{name: _('Latest Updates'), id: 'latest-updates', type: 'action', iosapp: false},
+				{name: _('About'), id: 'about', type: 'action'}]
+			},
+			{name: _('Last modification'), id: 'last-mod', type: 'action', tablet: false}
+		],
+
 		spreadsheet: [
 			{name: _UNO('.uno:PickList', 'spreadsheet'), id: 'file', type: 'menu', menu: [
 				{name: _UNO('.uno:Save', 'spreadsheet'), id: 'save', type: 'action'},
@@ -394,7 +507,8 @@ L.Control.Menubar = L.Control.extend({
 					{name: _('PDF Document (.pdf)'), id: 'downloadas-pdf', type: 'action'},
 					{name: _('ODF spreadsheet (.ods)'), id: 'downloadas-ods', type: 'action'},
 					{name: _('Excel 2003 Spreadsheet (.xls)'), id: 'downloadas-xls', type: 'action'},
-					{name: _('Excel Spreadsheet (.xlsx)'), id: 'downloadas-xlsx', type: 'action'}]},
+					{name: _('Excel Spreadsheet (.xlsx)'), id: 'downloadas-xlsx', type: 'action'},
+					{name: _('CSV file (.csv)'), id: 'downloadas-csv', type: 'action'}]},
 				{type: 'separator'},
 				{name: _UNO('.uno:Print', 'spreadsheet'), id: 'print', type: 'action'},
 				{name: _('Close document'), id: 'closedocument', type: 'action'}
@@ -432,6 +546,7 @@ L.Control.Menubar = L.Control.extend({
 				{name: _UNO('.uno:DataDataPilotRun', 'spreadsheet'), uno: '.uno:DataDataPilotRun'},
 				{name: _UNO('.uno:InsertAnnotation', 'spreadsheet'), id: 'insertcomment', type: 'action'},
 				{uno: '.uno:InsertObjectChart'},
+				{name: _UNO('.uno:FontworkGalleryFloater'), uno: '.uno:FontworkGalleryFloater'},
 				{uno: '.uno:FunctionDialog'},
 				{type: 'separator'},
 				{name: _UNO('.uno:HyperlinkDialog'), id: 'inserthyperlink', type: 'action'},
@@ -581,9 +696,7 @@ L.Control.Menubar = L.Control.extend({
 				{uno: '.uno:SpellOnline'},
 				{name: _UNO('.uno:LanguageMenu'), type: 'menu', menu: [
 					{name: _('None (Do not check spelling)'), id: 'nonelanguage', uno: '.uno:LanguageStatus?Language:string=Default_LANGUAGE_NONE'}]},
-				{uno: '.uno:GoalSeekDialog'},
-				{type: 'separator'},
-				{name: _UNO('.uno:RunMacro'), id: 'runmacro', type: 'action'}
+				{uno: '.uno:GoalSeekDialog'}
 			]},
 			{name: _UNO('.uno:HelpMenu', 'spreadsheet'), id: 'help', type: 'menu', menu: [
 				{name: _('Online Help'), id: 'online-help', type: 'action', iosapp: false},
@@ -787,6 +900,7 @@ L.Control.Menubar = L.Control.extend({
 					{type: 'separator'},
 					{name: _UNO('.uno:HyperlinkDialog'), id: 'inserthyperlink', type: 'action'},
 					{name: _UNO('.uno:ShapesMenu'), id: 'insertshape', type: 'action'},
+					{name: _UNO('.uno:FontworkGalleryFloater'), uno: '.uno:FontworkGalleryFloater'},
 					{name: _UNO('.uno:FormattingMarkMenu', 'text'), id: 'formattingmark', type: 'menu', menu: [
 						{uno: '.uno:InsertNonBreakingSpace'},
 						{uno: '.uno:InsertHardHyphen'},
@@ -805,6 +919,7 @@ L.Control.Menubar = L.Control.extend({
 					{name: _UNO('.uno:InsertAnnotation', 'spreadsheet'), id: 'insertcomment', type: 'action'},
 					{type: 'separator'},
 					{name: _UNO('.uno:HyperlinkDialog'), id: 'inserthyperlink', type: 'action'},
+					{name: _UNO('.uno:FontworkGalleryFloater'), uno: '.uno:FontworkGalleryFloater'},
 					{name: _UNO('.uno:ShapesMenu'), id: 'insertshape', type: 'action'},
 					{uno: '.uno:InsertCurrentDate'},
 					{uno: '.uno:InsertCurrentTime'},
@@ -819,6 +934,7 @@ L.Control.Menubar = L.Control.extend({
 					{name: _UNO('.uno:TableMenu'), id: 'inserttable', type: 'action'},
 					{name: _UNO('.uno:HyperlinkDialog'), id: 'inserthyperlink', type: 'action'},
 					{name: _UNO('.uno:ShapesMenu'), id: 'insertshape', type: 'action'},
+					{name: _UNO('.uno:FontworkGalleryFloater'), uno: '.uno:FontworkGalleryFloater'},
 					{name: _UNO('.uno:Text', 'presentation'), id: 'inserttextbox', type: 'action'},
 					{name: _UNO('.uno:InsertField', 'text'), id: 'insertfield', type: 'menu', menu: [
 						{uno: '.uno:InsertDateFieldFix'},
@@ -843,7 +959,7 @@ L.Control.Menubar = L.Control.extend({
 			'savecomments', 'shareas', 'print', // file menu
 			'downloadas-pdf', 'downloadas-odt', 'downloadas-doc', 'downloadas-docx', 'downloadas-rtf', 'downloadas-epub', // file menu
 			'downloadas-odp', 'downloadas-ppt', 'downloadas-pptx', 'downloadas-odg', 'print', // file menu
-			'downloadas-ods', 'downloadas-xls', 'downloadas-xlsx', 'closedocument', // file menu
+			'downloadas-ods', 'downloadas-xls', 'downloadas-xlsx', 'downloadas-csv', 'closedocument', // file menu
 			'fullscreen', 'zoomin', 'zoomout', 'zoomreset', 'showresolved', // view menu
 			'about', 'keyboard-shortcuts', 'latest-updates', 'online-help', 'report-an-issue', // help menu
 			'insertcomment'
@@ -962,8 +1078,10 @@ L.Control.Menubar = L.Control.extend({
 			this._initializeMenu(this.options.text);
 		} else if (docType === 'spreadsheet') {
 			this._initializeMenu(this.options.spreadsheet);
-		} else if (docType === 'presentation' || docType === 'drawing') {
+		} else if (docType === 'presentation') {
 			this._initializeMenu(this.options.presentation);
+		} else if (docType === 'drawing') {
+			this._initializeMenu(this.options.drawing);
 		}
 
 		// initialize menubar plugin
@@ -1238,7 +1356,7 @@ L.Control.Menubar = L.Control.extend({
 	},
 
 	_openInsertShapesWizard: function() {
-		var content = window.createShapesPanel();
+		var content = window.createShapesPanel('insertshapes');
 		var data = {
 			id: 'insertshape',
 			type: '',
@@ -1462,8 +1580,10 @@ L.Control.Menubar = L.Control.extend({
 			iconClass += ' writer-icon-img';
 		} else if (docType === 'spreadsheet') {
 			iconClass += ' calc-icon-img';
-		} else if (docType === 'presentation' || docType === 'drawing') {
+		} else if (docType === 'presentation') {
 			iconClass += ' impress-icon-img';
+		} else if (docType === 'drawing') {
+			iconClass += ' draw-icon-img';
 		}
 		$('.main-nav').addClass(docType + '-color-indicator');
 

@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.63])
 
-AC_INIT([loolwsd], [6.4.4], [https://github.com/CollaboraOnline/online/issues], [loolwsd], [https://collaboraonline.github.io/])
+AC_INIT([loolwsd], [6.4.6], [https://github.com/CollaboraOnline/online/issues], [loolwsd], [https://collaboraonline.github.io/])
 LT_INIT([shared, disable-static, dlopen])
 
 AM_INIT_AUTOMAKE([1.10 foreign subdir-objects tar-pax -Wno-portability])
@@ -1049,7 +1049,7 @@ AS_IF([test `uname -s` = "Linux"],
            fi
        fi
        if test "$enable_cypress" = "yes"; then
-           AC_PATH_PROGS(CHROME, chrome google-chrome chromium chromium-browser, no)
+           AC_PATH_PROGS(CHROME, chromium chromium-browser chrome google-chrome, no)
            if test "$CHROME" = "no"; then
                AC_MSG_ERROR([chrome or chromium is required to run the JS tests, but not installed])
            fi
