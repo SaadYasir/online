@@ -399,6 +399,7 @@ class ScrollSection {
 			this.map.scrollTop(this.sectionProperties.documentTopMax / this.dpiScale, {});
 		else // Humph, everything is normal.
 			this.map.scroll(0, offset / this.dpiScale, {});
+		this.onUpdateScrollOffset();
 	}
 
 	public scrollHorizontalWithOffset (offset: number) {
@@ -410,6 +411,7 @@ class ScrollSection {
 			this.map.scrollLeft(this.sectionProperties.documentRightMax / this.dpiScale, {});
 		else // Humph, everything is normal.
 			this.map.scroll(offset / this.dpiScale, 0, {});
+		this.onUpdateScrollOffset();
 	}
 
 	public onMouseMove (position: Array<number>, dragDistance: Array<number>, e: MouseEvent) {
@@ -511,11 +513,7 @@ class ScrollSection {
 	}
 
 	private performVerticalScroll (delta: number) {
-		if (delta > 0)
-			this.scrollVerticalWithOffset(30);
-		else
-			this.scrollVerticalWithOffset(-30);
-
+		this.scrollVerticalWithOffset(delta);
 		this.sectionProperties.drawVerticalScrollBar = true;
 		this.containerObject.requestReDraw();
 		this.sectionProperties.drawVerticalScrollBar = false;
@@ -523,11 +521,7 @@ class ScrollSection {
 	}
 
 	private performHorizontalScroll (delta: number) {
-		if (delta > 0)
-			this.scrollHorizontalWithOffset(30);
-		else
-			this.scrollHorizontalWithOffset(-30);
-
+		this.scrollHorizontalWithOffset(delta);
 		this.sectionProperties.drawHorizontalScrollBar = true;
 		this.containerObject.requestReDraw();
 		this.sectionProperties.drawVerticalScrollBar = false;

@@ -25,6 +25,7 @@
 #define LOOLWSD_TEST_DOCUMENT_RELATIVE_PATH_WRITER  "test/data/hello-world.odt"
 #define LOOLWSD_TEST_DOCUMENT_RELATIVE_PATH_CALC    "test/data/hello-world.ods"
 #define LOOLWSD_TEST_DOCUMENT_RELATIVE_PATH_IMPRESS "test/data/hello-world.odp"
+#define LOOLWSD_TEST_DOCUMENT_RELATIVE_PATH_DRAW    "test/data/hello-world.odg"
 
 /* Default ciphers used, when not specified otherwise */
 #define DEFAULT_CIPHER_SET "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH"
@@ -958,6 +959,7 @@ void LOOLWSD::initialize(Application& self)
             { "per_view.out_of_focus_timeout_secs", "120" },
             { "security.capabilities", "true" },
             { "security.seccomp", "true" },
+            { "security.jwt_expiry_secs", "1800" },
             { "server_name", "" },
             { "ssl.ca_file_path", LOOLWSD_CONFIGDIR "/ca-chain.cert.pem" },
             { "ssl.cert_file_path", LOOLWSD_CONFIGDIR "/cert.pem" },
@@ -1400,6 +1402,7 @@ void LOOLWSD::initialize(Application& self)
               << "    Writer:      " << getLaunchURI(LOOLWSD_TEST_DOCUMENT_RELATIVE_PATH_WRITER) << '\n'
               << "    Calc:        " << getLaunchURI(LOOLWSD_TEST_DOCUMENT_RELATIVE_PATH_CALC) << '\n'
               << "    Impress:     " << getLaunchURI(LOOLWSD_TEST_DOCUMENT_RELATIVE_PATH_IMPRESS) << '\n'
+              << "    Draw:        " << getLaunchURI(LOOLWSD_TEST_DOCUMENT_RELATIVE_PATH_DRAW) << '\n'
               << "    postMessage: " << postMessageURI << std::endl;
 
     const std::string adminURI = getServiceURI(LOOLWSD_TEST_ADMIN_CONSOLE, true);
@@ -2304,7 +2307,8 @@ public:
         }
         return hosts.match(address);
     }
-    bool allowConvertTo(const std::string &address, const Poco::Net::HTTPRequest& request)
+
+    static bool allowConvertTo(const std::string& address, const Poco::Net::HTTPRequest& request)
     {
         std::string addressToCheck = address;
         std::string hostToCheck = request.getHost();
@@ -3764,33 +3768,14 @@ private:
     /// This thread & poll accepts incoming connections.
     AcceptPoll _acceptPoll;
 
-    /// Create a new server socket - accepted sockets will be added
-    /// to the @clientSockets' poll when created with @factory.
-    static std::shared_ptr<ServerSocket> getServerSocket(ServerSocket::Type type, int port,
-                                                  SocketPoll &clientSocket,
-                                                  const std::shared_ptr<SocketFactory>& factory)
-    {
-        auto serverSocket = std::make_shared<ServerSocket>(
-            ClientPortProto, clientSocket, factory);
-
-        if (!serverSocket->bind(type, port))
-            return nullptr;
-
-        if (serverSocket->listen())
-            return serverSocket;
-
-        return nullptr;
-    }
-
     /// Create the internal only, local socket for forkit / kits prisoners to talk to.
     std::shared_ptr<ServerSocket> findPrisonerServerPort()
     {
         std::shared_ptr<SocketFactory> factory = std::make_shared<PrisonerSocketFactory>();
 #if !MOBILEAPP
-        std::string location;
-        auto socket = std::make_shared<LocalServerSocket>(PrisonerPoll, factory);;
+        auto socket = std::make_shared<LocalServerSocket>(PrisonerPoll, factory);
 
-        location = socket->bind();
+        const std::string location = socket->bind();
         if (!location.length())
         {
             LOG_FTL("Failed to create local unix domain socket. Exiting.");
@@ -3810,8 +3795,9 @@ private:
         MasterLocation = location;
 #else
         constexpr int DEFAULT_MASTER_PORT_NUMBER = 9981;
-        std::shared_ptr<ServerSocket> socket = getServerSocket(
-            ServerSocket::Type::Public, DEFAULT_MASTER_PORT_NUMBER, PrisonerPoll, factory);
+        std::shared_ptr<ServerSocket> socket
+            = ServerSocket::create(ServerSocket::Type::Public, DEFAULT_MASTER_PORT_NUMBER,
+                                   ClientPortProto, PrisonerPoll, factory);
 
         LOOLWSD::prisonerServerSocketFD = socket->getFD();
         LOG_INF("Listening to prisoner connections on #" << LOOLWSD::prisonerServerSocketFD);
@@ -3831,8 +3817,8 @@ private:
 #endif
             factory = std::make_shared<PlainSocketFactory>();
 
-        std::shared_ptr<ServerSocket> socket = getServerSocket(
-            ClientListenAddr, port, WebServerPoll, factory);
+        std::shared_ptr<ServerSocket> socket
+            = ServerSocket::create(ClientListenAddr, port, ClientPortProto, WebServerPoll, factory);
 
         while (!socket &&
 #ifdef BUILDING_TESTS
@@ -3844,7 +3830,7 @@ private:
         {
             ++port;
             LOG_INF("Client port " << (port - 1) << " is busy, trying " << port << '.');
-            socket = getServerSocket(ClientListenAddr, port, WebServerPoll, factory);
+            socket = ServerSocket::create(ClientListenAddr, port, ClientPortProto, WebServerPoll, factory);
         }
 
         if (!socket)

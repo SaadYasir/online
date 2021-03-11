@@ -101,6 +101,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		this._controlHandlers['drawingarea'] = this._drawingAreaControl;
 		this._controlHandlers['rootcomment'] = this._rootCommentControl;
 		this._controlHandlers['comment'] = this._commentControl;
+		this._controlHandlers['emptyCommentWizard'] = this._rootCommentControl;
 		this._controlHandlers['separator'] = this._separatorControl;
 		this._controlHandlers['menubutton'] = this._menubuttonControl;
 
@@ -1496,7 +1497,10 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		if (controlType === 'textarea')
 			edit.value = builder._cleanText(data.text);
 		else
+		{
+			data.text = data.text.replace(/(?:\r\n|\r|\n)/g, '<br>');
 			edit.innerHTML = builder._cleanText(data.text);
+		}
 
 		edit.id = data.id;
 
@@ -1898,7 +1902,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 
 		var firstSelected = $(container).children('.selected').get(0);
 		if (firstSelected)
-			firstSelected.scrollIntoView({behavior: 'smooth', block: 'center'});
+			firstSelected.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'nearest'});
 
 		return false;
 	},
@@ -2150,6 +2154,12 @@ L.Control.JSDialogBuilder = L.Control.extend({
 	},
 
 	_rootCommentControl: function(parentContainer, data, builder) {
+
+		if (data.type === 'emptyCommentWizard') {
+			builder._emptyCommentWizard(parentContainer, data);
+			return;
+		}
+
 		var container = L.DomUtil.create('div',  'ui-header level-' + builder._currentDepth + ' ' + builder.options.cssClass + ' ui-widget', parentContainer);
 		container.annotation = data.annotation;
 		container.id = data.id;
@@ -2201,6 +2211,11 @@ L.Control.JSDialogBuilder = L.Control.extend({
 	_commentControl: function(parentContainer, data, builder) {
 		builder._createComment(parentContainer, data, false);
 		return false;
+	},
+
+	_emptyCommentWizard: function(parentContainer, data) {
+		var textNode = L.DomUtil.create('span', 'empty-comment-wizard', parentContainer);
+		textNode.innerText = data.text;
 	},
 
 	_createIconURL: function(name) {
@@ -2903,7 +2918,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 			var entry = $(control).children().eq(pos);
 
 			entry.addClass('selected');
-			$(entry).get(0).scrollIntoView({behavior: 'smooth', block: 'center'});
+			$(entry).get(0).scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'nearest'});
 
 			break;
 		}

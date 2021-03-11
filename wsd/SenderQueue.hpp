@@ -46,20 +46,23 @@ public:
     /// Dequeue an item if we have one - @returns true if we do, else false.
     bool dequeue(Item& item)
     {
+        // This check is always thread-safe.
+        if (SigUtil::getTerminationFlag())
+        {
+            LOG_DBG("SenderQueue: TerminationFlag is set");
+            return false;
+        }
+
         std::unique_lock<std::mutex> lock(_mutex);
 
-        if (!_queue.empty() && !SigUtil::getTerminationFlag())
+        if (!_queue.empty())
         {
             item = _queue.front();
             _queue.pop_front();
             return true;
         }
-        else
-        {
-            if (SigUtil::getTerminationFlag())
-                LOG_DBG("SenderQueue: TerminationFlag is set");
-            return false;
-        }
+
+        return false;
     }
 
     size_t size() const
@@ -94,7 +97,7 @@ private:
             const auto& pos = std::find_if(_queue.begin(), _queue.end(),
                 [&newTile](const queue_item_t& cur)
                 {
-                    return cur->firstToken() == "tile:" &&
+                    return cur->firstTokenMatches("tile:") &&
                            newTile == TileDesc::parse(cur->firstLine());
                 });
 
@@ -110,7 +113,7 @@ private:
             const auto& pos = std::find_if(_queue.begin(), _queue.end(),
                 [&command](const queue_item_t& cur)
                 {
-                    return cur->firstToken() == command;
+                    return cur->firstTokenMatches(command);
                 });
 
             if (pos != _queue.end())
@@ -128,7 +131,7 @@ private:
             const auto& pos = std::find_if(_queue.begin(), _queue.end(),
                 [command, viewId](const queue_item_t& cur)
                 {
-                    if (cur->firstToken() == command)
+                    if (cur->firstTokenMatches(command))
                     {
                         const std::string msg = cur->jsonString();
                         Poco::JSON::Parser parser;

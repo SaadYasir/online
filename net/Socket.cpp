@@ -116,7 +116,7 @@ namespace {
 SocketPoll::SocketPoll(const std::string& threadName)
     : _name(threadName),
       _stop(false),
-      _threadStarted(false),
+      _threadStarted(0),
       _threadFinished(false),
       _runOnClientThread(false),
       _owner(std::this_thread::get_id())
@@ -166,23 +166,25 @@ bool SocketPoll::startThread()
 {
     assert(!_runOnClientThread);
 
-    if (!_threadStarted)
+    // In a race, only the first gets in.
+    if (_threadStarted++ == 0)
     {
-        _threadStarted = true;
         _threadFinished = false;
         _stop = false;
         try
         {
-            LOG_TRC("starting thread for poll " << _name);
+            LOG_TRC("Creating thread for poll " << _name);
             _thread = std::thread(&SocketPoll::pollingThreadEntry, this);
             return true;
         }
         catch (const std::exception& exc)
         {
-            LOG_ERR("Failed to start poll thread: " << exc.what());
-            _threadStarted = false;
+            LOG_ERR("Failed to start poll thread [" << _name << "]: " << exc.what());
+            _threadStarted = 0;
         }
     }
+    else
+        LOG_ERR("SocketPoll [" << _name << "] thread is already started.");
 
     return false;
 }
@@ -205,7 +207,7 @@ void SocketPoll::joinThread()
         else
         {
             _thread.join();
-            _threadStarted = false;
+            _threadStarted = 0;
         }
     }
 }
@@ -626,16 +628,19 @@ bool ServerSocket::bind(Type type, int port)
         else
             addrv6.sin6_addr = in6addr_loopback;
 
-        int ipv6only = _type == Socket::Type::All ? 0 : 1;
+        const int ipv6only = (_type == Socket::Type::All ? 0 : 1);
         if (::setsockopt(getFD(), IPPROTO_IPV6, IPV6_V6ONLY, (char*)&ipv6only, sizeof(ipv6only)) == -1)
-            LOG_SYS("Failed set ipv6 socket to %d" << ipv6only);
+            LOG_SYS('#' << getFD() << " Failed set ipv6 socket to " << ipv6only);
 
         rc = ::bind(getFD(), (const sockaddr *)&addrv6, sizeof(addrv6));
     }
 
     if (rc)
-        LOG_SYS("Failed to bind to: " << (_type == Socket::Type::IPv4 ? "IPv4" : "IPv6")
-                                      << " port: " << port);
+        LOG_SYS('#' << getFD() << " Failed to bind to: "
+                    << (_type == Socket::Type::IPv4 ? "IPv4" : "IPv6") << " port: " << port);
+    else
+        LOG_TRC('#' << getFD() << " bind to: " << (_type == Socket::Type::IPv4 ? "IPv4" : "IPv6")
+                    << " port: " << port);
 
     return rc == 0;
 #else
@@ -706,16 +711,16 @@ int Socket::getPid() const
     socklen_t credSize = sizeof(struct ucred);
     if (getsockopt(_fd, SOL_SOCKET, SO_PEERCRED, &creds, &credSize) < 0)
     {
-        LOG_TRC("Failed to get pid via peer creds on " << _fd << ' ' << strerror(errno));
+        LOG_SYS("Failed to get pid via peer creds on " << _fd);
         return -1;
     }
     return creds.pid;
 #elif defined(__FreeBSD__)
     struct xucred creds;
     socklen_t credSize = sizeof(struct xucred);
-    if(getsockopt(_fd, 0, LOCAL_PEERCRED, &creds, &credSize) < 0)
+    if (getsockopt(_fd, 0, LOCAL_PEERCRED, &creds, &credSize) < 0)
     {
-        LOG_TRC("Failed to get pid via peer creds on " << _fd << ' ' << strerror(errno));
+        LOG_SYS("Failed to get pid via peer creds on " << _fd);
         return -1;
     }
     return creds.cr_pid;
@@ -755,7 +760,7 @@ std::shared_ptr<Socket> LocalServerSocket::accept()
         socklen_t credSize = sizeof(struct ucred);
         if (getsockopt(getFD(), SOL_SOCKET, SO_PEERCRED, &creds, &credSize) < 0)
         {
-            LOG_ERR("Failed to get peer creds on " << getFD() << ' ' << strerror(errno));
+            LOG_SYS("Failed to get peer creds on " << getFD());
             ::close(rc);
             return std::shared_ptr<Socket>(nullptr);
         }
@@ -767,7 +772,7 @@ std::shared_ptr<Socket> LocalServerSocket::accept()
         socklen_t credSize = sizeof(struct xucred);
         if (getsockopt(getFD(), 0, LOCAL_PEERCRED, &creds, &credSize) < 0)
         {
-            LOG_ERR("Failed to get peer creds on " << getFD() << ' ' << strerror(errno));
+            LOG_SYS("Failed to get peer creds on " << getFD());
             ::close(rc);
             return std::shared_ptr<Socket>(nullptr);
         }
@@ -816,18 +821,18 @@ std::string LocalServerSocket::bind()
         std::memcpy(addrunix.sun_path, socketAbstractUnixName.c_str(), socketAbstractUnixName.length());
         addrunix.sun_path[0] = '\0'; // abstract name
 
-        std::string rand = Util::rng::getFilename(8);
+        const std::string rand = Util::rng::getFilename(8);
         memcpy(addrunix.sun_path + socketAbstractUnixName.length(), rand.c_str(), 8);
 
         rc = ::bind(getFD(), (const sockaddr *)&addrunix, sizeof(struct sockaddr_un));
-        LOG_TRC("Bind to location " << std::string(&addrunix.sun_path[1]) <<
-                " result - " << rc << "errno: " << ((rc >= 0) ? "no error" : ::strerror(errno)));
+        LOG_SYS('#' << getFD() << " Bind to location " << std::string(&addrunix.sun_path[1])
+                    << " result - " << rc);
     } while (rc < 0 && errno == EADDRINUSE);
 
     if (rc >= 0)
         return std::string(&addrunix.sun_path[1]);
 
-    return "";
+    return std::string();
 }
 
 // For a verbose life, tweak here:

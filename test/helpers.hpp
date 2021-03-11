@@ -32,6 +32,7 @@
 
 #include <iterator>
 #include <fstream>
+#include <string>
 
 #ifndef TDOC
 #error TDOC must be defined (see Makefile.am)
@@ -136,14 +137,57 @@ void sendTextFrame(const std::shared_ptr<LOOLWebSocket>& socket, const std::stri
     sendTextFrame(*socket, string, name);
 }
 
-inline
-Poco::Net::HTTPClientSession* createSession(const Poco::URI& uri)
+inline std::unique_ptr<Poco::Net::HTTPClientSession> createSession(const Poco::URI& uri)
 {
 #if ENABLE_SSL
     if (uri.getScheme() == "https" || uri.getScheme() == "wss")
-        return new Poco::Net::HTTPSClientSession(uri.getHost(), uri.getPort());
+        return Util::make_unique<Poco::Net::HTTPSClientSession>(uri.getHost(), uri.getPort());
 #endif
-    return new Poco::Net::HTTPClientSession(uri.getHost(), uri.getPort());
+
+    return Util::make_unique<Poco::Net::HTTPClientSession>(uri.getHost(), uri.getPort());
+}
+
+/// Uses Poco to make an HTTP GET from the given URI.
+inline std::pair<std::shared_ptr<Poco::Net::HTTPResponse>, std::string>
+pocoGet(const Poco::URI& uri)
+{
+    try
+    {
+        LOG_INF("pocoGet: " << uri.toString());
+        std::unique_ptr<Poco::Net::HTTPClientSession> session(helpers::createSession(uri));
+        Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, uri.getPathAndQuery(),
+                                       Poco::Net::HTTPMessage::HTTP_1_1);
+        session->sendRequest(request);
+        auto response = std::make_shared<Poco::Net::HTTPResponse>();
+        std::istream& rs = session->receiveResponse(*response);
+        LOG_DBG("pocoGet response for [" << uri.toString() << "]: " << response->getStatus() << ' '
+                                         << response->getReason());
+
+        std::string responseString;
+        if (response->hasContentLength() && response->getContentLength() > 0)
+        {
+            std::ostringstream outputStringStream;
+            Poco::StreamCopier::copyStream(rs, outputStringStream);
+            responseString = outputStringStream.str();
+            LOG_DBG("pocoGet [" << uri.toString() << "]: " << responseString);
+        }
+
+        return std::make_pair(response, responseString);
+    }
+    catch (const std::exception& ex)
+    {
+        LOG_ERR("pocoGet failed for [" << uri.toString() << "]: " << ex.what());
+        throw;
+    }
+}
+
+/// Uses Poco to make an HTTP GET from the given URI components.
+inline std::pair<std::shared_ptr<Poco::Net::HTTPResponse>, std::string>
+pocoGet(bool secure, const std::string& host, const int port, const std::string& url)
+{
+    const char* scheme = (secure ? "https://" : "http://");
+    Poco::URI uri(scheme + host + ':' + std::to_string(port) + url);
+    return pocoGet(uri);
 }
 
 inline std::shared_ptr<Poco::Net::StreamSocket> createRawSocket()
@@ -238,7 +282,7 @@ int getErrorCode(LOOLWebSocket& ws, std::string& message, const std::string& tes
     do
     {
         // Read next WS frame and log it.
-        bytes = ws.receiveFrame(buffer.begin(), READ_BUFFER_SIZE, flags);
+        bytes = ws.receiveFrame(buffer.begin(), READ_BUFFER_SIZE, flags, testname);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     while (bytes > 0 && (flags & Poco::Net::WebSocket::FRAME_OP_BITMASK) != Poco::Net::WebSocket::FRAME_OP_CLOSE);
@@ -288,7 +332,7 @@ std::vector<char> getResponseMessage(LOOLWebSocket& ws, const std::string& prefi
             if (ws.poll(Poco::Timespan(waitTimeUs), Poco::Net::Socket::SELECT_READ))
             {
                 response.resize(READ_BUFFER_SIZE * 8);
-                const int bytes = ws.receiveFrame(response.data(), response.size(), flags);
+                const int bytes = ws.receiveFrame(response.data(), response.size(), flags, testname);
                 response.resize(std::max(bytes, 0));
                 const auto message = LOOLProtocol::getFirstLine(response);
                 if (bytes > 0 && (flags & Poco::Net::WebSocket::FRAME_OP_BITMASK) != Poco::Net::WebSocket::FRAME_OP_CLOSE)
@@ -328,7 +372,7 @@ std::vector<char> getResponseMessage(LOOLWebSocket& ws, const std::string& prefi
     }
     catch (const Poco::Net::WebSocketException& exc)
     {
-        TST_LOG(exc.message());
+        TST_LOG('[' << prefix <<  "] ERROR in helpers::getResponseMessage: " << exc.message());
     }
 
     return std::vector<char>();
@@ -409,35 +453,37 @@ connectLOKit(const Poco::URI& uri,
              Poco::Net::HTTPResponse& response,
              const std::string& testname)
 {
-    TST_LOG_BEGIN("Connecting... ");
-    int retries = 10;
+    TST_LOG("Connecting to " << uri.toString());
+    constexpr int max_retries = 11;
+    int retries = max_retries - 1;
     do
     {
         try
         {
             std::unique_ptr<Poco::Net::HTTPClientSession> session(createSession(uri));
             auto ws = std::make_shared<LOOLWebSocket>(*session, request, response);
+
             const char* expected_response = "statusindicator: ready";
-            TST_LOG_END;
+
+            TST_LOG("Connected to " << uri.toString() << ", waiting for response ["
+                                    << expected_response << "]");
             if (getResponseString(ws, expected_response, testname) == expected_response)
             {
                 return ws;
             }
 
-            TST_LOG_BEGIN("Connecting... ");
-            TST_LOG_APPEND(11 - retries);
+            TST_LOG("ERROR: Reconnecting (retry #" << (max_retries - retries) << ") to " << uri.toString());
         }
         catch (const std::exception& ex)
         {
-            TST_LOG_END;
-            TST_LOG("Connection problem: " << ex.what());
+            TST_LOG("ERROR: Failed to connect to " << uri.toString() << ": " << ex.what());
         }
 
         std::this_thread::sleep_for(std::chrono::microseconds(POLL_TIMEOUT_MICRO_S));
     }
     while (retries--);
 
-    TST_LOG_END;
+    TST_LOG("ERROR: Giving up connecting to " << uri.toString());
     throw std::runtime_error("Cannot connect to [" + uri.toString() + "].");
 }
 
@@ -510,7 +556,7 @@ void SocketProcessor(const std::string& testname,
             break;
         }
 
-        n = socket->receiveFrame(buffer, sizeof(buffer), flags);
+        n = socket->receiveFrame(buffer, sizeof(buffer), flags, testname);
         TST_LOG("Got " << LOOLWebSocket::getAbbreviatedFrameDump(buffer, n, flags));
         if (n > 0 && (flags & Poco::Net::WebSocket::FRAME_OP_BITMASK) != Poco::Net::WebSocket::FRAME_OP_CLOSE)
         {

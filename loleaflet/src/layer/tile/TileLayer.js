@@ -1573,7 +1573,7 @@ L.TileLayer = L.GridLayer.extend({
 				cellViewCursorMarker = new CRectangle(this._cellViewCursors[viewId].corePixelBounds, {
 					fill: false,
 					color: backgroundColor,
-					weight: 2,
+					weight: 2 * (this._painter ? this._painter._dpiScale : 1),
 					toCompatUnits: function (corePx) {
 						return this._map.unproject(L.point(corePx)
 							.divideBy(this._painter._dpiScale));
@@ -1989,7 +1989,7 @@ L.TileLayer = L.GridLayer.extend({
 					pointerEvents: 'none',
 					fillColor: '#' + strColor,
 					fillOpacity: 0.25,
-					weight: 2,
+					weight: 2 * (this._painter ? this._painter._dpiScale : 1),
 					opacity: 0.25});
 
 				references.push({mark: reference, part: part});
@@ -2527,7 +2527,8 @@ L.TileLayer = L.GridLayer.extend({
 
 		if (!this._visibleCursor ||
 			this._referenceMarkerStart.isDragged ||
-			this._referenceMarkerEnd.isDragged) {
+			this._referenceMarkerEnd.isDragged ||
+			this._map.inZoomViewPanning()) {
 			return;
 		}
 
@@ -2564,6 +2565,10 @@ L.TileLayer = L.GridLayer.extend({
 				viewCursorMarker.setOpacity(this.isCursorVisible() && this._cursorMarker.getPosition().equals(viewCursorMarker.getPosition()) ? 0 : 1);
 			}
 		}, this, true);
+	},
+
+	activateCursor: function () {
+		this._replayPrintTwipsMsg('invalidatecursor');
 	},
 
 	// enable or disable blinking cursor and  the cursor overlay depending on
@@ -3234,12 +3239,15 @@ L.TileLayer = L.GridLayer.extend({
 
 			var hasTunneledDialogOpened = this._map.dialog ? this._map.dialog.hasOpenedDialog() : false;
 			var hasJSDialogOpened = this._map.jsdialog ? this._map.jsdialog.hasDialogOpened() : false;
-			var hasDialogOpened = hasTunneledDialogOpened || hasJSDialogOpened;
+			var isEditingAnnotation = this.editedAnnotation &&
+				(this._map.hasLayer(this.editedAnnotation) || this._map.hasLayer(this.editedAnnotation.annotation));
+			var isAnyInputFocused = $('input:focus').length > 0;
+			var dontFocusDocument = hasTunneledDialogOpened || hasJSDialogOpened || isEditingAnnotation || isAnyInputFocused;
 
 			// when the cell cursor is moving, the user is in the document,
 			// and the focus should leave the cell input bar
 			// exception: when dialog opened don't focus the document
-			if (!hasDialogOpened)
+			if (!dontFocusDocument)
 				this._map.fire('editorgotfocus');
 		}
 		else if (this._cellCursorMarker) {
@@ -3940,6 +3948,17 @@ L.TileLayer = L.GridLayer.extend({
 		}
 
 		this._map._docLayer._createCommentStructure(menuStructure);
+
+		if (menuStructure.children.length === 0) {
+			var noComments = {
+				id: 'emptyWizard',
+				enable: true,
+				type: 'emptyCommentWizard',
+				text: _('No Comments'),
+				children: []
+			};
+			menuStructure['children'].push(noComments);
+		}
 		return menuStructure;
 	},
 
@@ -4012,6 +4031,11 @@ L.TileLayer = L.GridLayer.extend({
 		this._printTwipsMessagesForReplay.forEach(this._onMessage.bind(this));
 	},
 
+	_replayPrintTwipsMsg: function (msgType) {
+		var msg = this._printTwipsMessagesForReplay.get(msgType);
+		this._onMessage(msg);
+	}
+
 });
 
 
@@ -4062,6 +4086,19 @@ L.MessageStore = L.Class.extend({
 
 		if (othersMessage && Object.prototype.hasOwnProperty.call(this._othersMessages, msgType)) {
 			this._othersMessages[msgType][viewId] = textMsg;
+		}
+	},
+
+	get: function (msgType, viewId) {
+
+		var othersMessage = (typeof viewId === 'number');
+
+		if (!othersMessage && Object.prototype.hasOwnProperty.call(this._ownMessages, msgType)) {
+			return this._ownMessages[msgType];
+		}
+
+		if (othersMessage && Object.prototype.hasOwnProperty.call(this._othersMessages, msgType)) {
+			return this._othersMessages[msgType][viewId];
 		}
 	},
 

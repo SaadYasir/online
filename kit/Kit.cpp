@@ -186,7 +186,8 @@ namespace
                 strcmp(path, "share/Scripts/java") != 0 &&
                 strcmp(path, "share/Scripts/javascript") != 0 &&
                 strcmp(path, "share/config/wizard") != 0 &&
-                strcmp(path, "readmes") != 0;
+                strcmp(path, "readmes") != 0 &&
+                strcmp(path, "help") != 0;
         default: // LinkOrCopyType::All
             return true;
         }
@@ -198,7 +199,11 @@ namespace
         {
         case LinkOrCopyType::LO:
         {
-            const char *dot = strrchr(path, '.');
+            if (strstr(path, "LICENSE") || strstr(path, "EULA") || strstr(path, "CREDITS")
+                || strstr(path, "NOTICE"))
+                return false;
+
+            const char* dot = strrchr(path, '.');
             if (!dot)
                 return true;
 
@@ -1456,7 +1461,7 @@ public:
         return _tileQueue && !_tileQueue->isEmpty();
     }
 
-    void drainQueue(const std::chrono::steady_clock::time_point &/*now*/)
+    void drainQueue()
     {
         try
         {
@@ -1488,7 +1493,7 @@ public:
                 {
                     renderCombinedTiles(tokens);
                 }
-                else if (LOOLProtocol::getFirstToken(tokens[0], '-') == "child")
+                else if (Util::startsWith(tokens[0], "child-"))
                 {
                     forwardToChild(tokens[0], input);
                 }
@@ -1523,23 +1528,28 @@ public:
                         const std::string payload(input.data() + offset, input.size() - offset);
 
                         // Forward the callback to the same view, demultiplexing is done by the LibreOffice core.
-                        // TODO: replace with a map to be faster.
                         bool isFound = false;
-                        for (auto& it : _sessions)
+                        for (const auto& it : _sessions)
                         {
-                            std::shared_ptr<ChildSession> session = it.second;
-                            if (session && ((broadcast && (session->getViewId() != exceptViewId)) || (!broadcast && (session->getViewId() == viewId))))
+                            if (!it.second)
+                                continue;
+
+                            ChildSession& session = *it.second;
+                            if ((broadcast && (session.getViewId() != exceptViewId))
+                                || (!broadcast && (session.getViewId() == viewId)))
                             {
-                                if (!it.second->isCloseFrame())
+                                if (!session.isCloseFrame())
                                 {
                                     isFound = true;
-                                    session->loKitCallback(type, payload);
+                                    session.loKitCallback(type, payload);
                                 }
                                 else
                                 {
-                                    LOG_ERR("Session-thread of session [" << session->getId() << "] for view [" <<
-                                            viewId << "] is not running. Dropping [" << lokCallbackTypeToString(type) <<
-                                            "] payload [" << payload << "].");
+                                    LOG_ERR("Session-thread of session ["
+                                            << session.getId() << "] for view [" << viewId
+                                            << "] is not running. Dropping ["
+                                            << lokCallbackTypeToString(type) << "] payload ["
+                                            << payload << ']');
                                 }
 
                                 if (!broadcast)
@@ -1767,12 +1777,12 @@ public:
     }
 
     // process pending message-queue events.
-    void drainQueue(const std::chrono::steady_clock::time_point &now)
+    void drainQueue()
     {
         SigUtil::checkDumpGlobalState(dump_kit_state);
 
         if (_document)
-            _document->drainQueue(now);
+            _document->drainQueue();
     }
 
     // called from inside poll, inside a wakeup
@@ -1814,7 +1824,7 @@ public:
                     break;
 
                 const auto now = std::chrono::steady_clock::now();
-                drainQueue(now);
+                drainQueue();
 
                 timeoutMicroS = std::chrono::duration_cast<std::chrono::microseconds>(_pollEnd - now).count();
                 ++eventsSignalled;
@@ -1822,7 +1832,7 @@ public:
             while (timeoutMicroS > 0 && !SigUtil::getTerminationFlag() && maxExtraEvents-- > 0);
         }
 
-        drainQueue(std::chrono::steady_clock::now());
+        drainQueue();
 
 #if !MOBILEAPP
         if (_document && _document->purgeSessions() == 0)

@@ -205,93 +205,6 @@ L.TextInput = L.Layer.extend({
 			return;
 		}
 
-		// Are we running in a WebView under an iOS app that uses
-		// CollaboraOnlineWebViewKeyboardManager?
-		if (window.webkit &&
-		    window.webkit.messageHandlers &&
-		    window.webkit.messageHandlers.CollaboraOnlineWebViewKeyboardManager) {
-
-			if (!acceptInput) {
-				window.webkit.messageHandlers.CollaboraOnlineWebViewKeyboardManager.postMessage({command: 'hide'});
-				return;
-			}
-
-			// Define the function that CollaboraOnlineWebViewKeyboardManager will call.
-			// This is a hardcoded name that CollaboraOnlineWebViewKeyboardManager
-			// knows. This is not a problem as we can keep both codebases in sync.
-
-			var that = this;
-			window.COKbdMgrCallback = function(message) {
-				var errorMessage;
-				if (typeof message !== 'object') {
-					errorMessage = 'COKbdMgrCallback called with non-object of type ' + typeof message;
-					console.log(errorMessage);
-					throw errorMessage;
-				}
-
-				if (message.id !== 'COKbdMgr') {
-					errorMessage = 'COKbdMgrCallback called with object with unknown id: ' + message.id;
-					console.log(errorMessage);
-					throw errorMessage;
-				}
-
-				if (message.command === undefined || typeof message.command !== 'string') {
-					errorMessage = 'COKbdMgrCallback called without command';
-					console.log(errorMessage);
-					throw errorMessage;
-				}
-
-				if (message.command === 'replaceText') {
-					if (message.text === undefined || typeof message.text !== 'string') {
-						errorMessage = 'COKbdMgrCallback called for replaceText without text';
-						console.log(errorMessage);
-						throw errorMessage;
-					}
-
-					if (message.location === undefined || typeof message.location !== 'number') {
-						errorMessage = 'COKbdMgrCallback called for replaceText without location';
-						console.log(errorMessage);
-						throw errorMessage;
-					}
-
-					if (message.length === undefined || typeof message.length !== 'number') {
-						errorMessage = 'COKbdMgrCallback called for replaceText without length';
-						console.log(errorMessage);
-						throw errorMessage;
-					}
-
-					if (message.location < 0) {
-						if (that._textArea.value.length > 2) {
-							that._textArea.value = that._textArea.value.slice(0, message.location - 1) + that._textArea.value.slice(-1);
-							that._onInput({});
-						} else {
-							that._removeTextContent(-message.location, 0);
-						}
-					}
-					if (message.text.length > 0) {
-						that._textArea.value = that._textArea.value.slice(0, -1) + message.text + that._textArea.value.slice(-1);
-						that._onInput({});
-					}
-				} else if (message.command === 'unoCommand') {
-					if (message.uno === undefined || typeof message.uno !== 'string') {
-						errorMessage = 'COKbdMgrCallback called for unoCommand without UNO command';
-						console.log(errorMessage);
-						throw errorMessage;
-					}
-					that._map.sendUnoCommand('.uno:' + message.uno);
-				} else {
-					errorMessage = 'COKbdMgrCallback called with unknown command ' + message.command;
-					console.log(errorMessage);
-					throw errorMessage;
-				}
-			};
-
-			window.webkit.messageHandlers.CollaboraOnlineWebViewKeyboardManager.postMessage({command: 'display', text: this._textArea.value.slice(1, -1)});
-			this._onFocusBlur({type: 'focus'});
-
-			return;
-		}
-
 		// Trick to avoid showing the software keyboard: Set the textarea
 		// read-only before focus() and reset it again after the blur()
 		if (!window.ThisIsTheiOSApp && navigator.platform !== 'iPhone' && !window.mode.isChromebook()) {
@@ -337,16 +250,6 @@ L.TextInput = L.Layer.extend({
 	},
 
 	blur: function() {
-		// Are we running in a WebView under an iOS app that uses
-		// CollaboraOnlineWebViewKeyboardManager?
-		if (window.webkit &&
-		    window.webkit.messageHandlers &&
-		    window.webkit.messageHandlers.CollaboraOnlineWebViewKeyboardManager) {
-			window.webkit.messageHandlers.CollaboraOnlineWebViewKeyboardManager.postMessage({command: 'hide'});
-			this._onFocusBlur({type: 'blur'});
-			return;
-		}
-
 		this._setAcceptInput(false);
 		if (!window.ThisIsTheiOSApp && navigator.platform !== 'iPhone' && !window.mode.isChromebook())
 			this._textArea.blur();
@@ -523,6 +426,8 @@ L.TextInput = L.Layer.extend({
 		// Move the hidden text area with the cursor
 		this._latlng = L.latLng(top);
 		this.update();
+		// shape handlers hidden (if selected)
+		this._map.fire('handlerstatus', {hidden: true});
 	},
 
 	// Hides the caret and the under-caret marker.
@@ -533,6 +438,8 @@ L.TextInput = L.Layer.extend({
 		if (this._map._docLayer._cursorMarker.isVisible())
 			this._map._docLayer._cursorMarker.remove();
 		this._map.removeLayer(this._cursorHandler);
+		// shape handlers visible again (if selected)
+		this._map.fire('handlerstatus', {hidden: false});
 	},
 
 	_setPos: function(pos) {
@@ -701,6 +608,15 @@ L.TextInput = L.Layer.extend({
 		// remove leading & tailing spaces.
 		content = content.slice(1, -1);
 
+		// In the android keyboard when you try to erase in an empty area
+		// and then enter some character,
+		// The first character will likely travel with the cursor,
+		// And that is caused because after entering the first character
+		// cursor position is never updated by keyboard (I know it is strange)
+		// so here we manually correct the position
+		if (content.length === 1 && this._lastContent.length === 0)
+			this._setCursorPosition(2);
+
 		var matchTo = 0;
 		var sharedLength = Math.min(content.length, this._lastContent.length);
 		while (matchTo < sharedLength && content[matchTo] === this._lastContent[matchTo])
@@ -812,11 +728,7 @@ L.TextInput = L.Layer.extend({
 
 		// avoid setting the focus keyboard
 		if (!noSelect) {
-			try {
-				this._textArea.setSelectionRange(1, 1);
-			} catch (err) {
-				// old firefox throws an exception on start.
-			}
+			this._setCursorPosition(1);
 
 			if (this._hasWorkingSelectionStart === undefined)
 				this._hasWorkingSelectionStart = (this._textArea.selectionStart === 1);
@@ -965,6 +877,14 @@ L.TextInput = L.Layer.extend({
 		var cursorPos = this._map._docLayer._latLngToTwips(ev.target.getLatLng());
 		this._map._docLayer._postMouseEvent('buttondown', cursorPos.x, cursorPos.y, 1, 1, 0);
 		this._map._docLayer._postMouseEvent('buttonup', cursorPos.x, cursorPos.y, 1, 1, 0);
+	},
+
+	_setCursorPosition: function(pos) {
+		try {
+			this._textArea.setSelectionRange(pos, pos);
+		} catch (err) {
+			// old firefox throws an exception on start.
+		}
 	},
 
 	_setAcceptInput: function(accept) {

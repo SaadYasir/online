@@ -13,6 +13,8 @@ L.CalcTileLayer = L.CanvasTileLayer.extend({
 		syncSplits: true, // if false, the splits/freezes are not synced with other users viewing the same sheet.
 	},
 
+	editedAnnotation: null,
+
 	twipsToHMM: function (twips) {
 		return (twips * 127 + 36) / 72;
 	},
@@ -37,6 +39,7 @@ L.CalcTileLayer = L.CanvasTileLayer.extend({
 				annotation._annotation._tag = annotation;
 				this.showAnnotation(annotation);
 			}
+			this.editedAnnotation = annotation;
 			annotation.editAnnotation();
 		}
 	},
@@ -89,6 +92,7 @@ L.CalcTileLayer = L.CanvasTileLayer.extend({
 	},
 
 	onAnnotationModify: function (annotation) {
+		this.editedAnnotation = annotation;
 		if (window.mode.isMobile() || window.mode.isTablet()) {
 			var that = this;
 			this.newAnnotationVex(annotation, function(annotation) { that._onAnnotationSave(annotation); }, /* isMod */ true);
@@ -112,6 +116,7 @@ L.CalcTileLayer = L.CanvasTileLayer.extend({
 	},
 
 	onAnnotationReply: function (annotation) {
+		this.editedAnnotation = annotation;
 		annotation.reply();
 		annotation.focus();
 	},
@@ -1321,6 +1326,18 @@ L.SheetGeometry = L.Class.extend({
 		return this._rows.getGroupsDataInView();
 	},
 
+	// accepts a point in display twips coordinates at current zoom
+	// and returns the equivalent point in display-twips at the given zoom.
+	getTileTwipsAtZoom: function (point, zoomScale) { // (L.Point) -> L.Point
+		if (!(point instanceof L.Point)) {
+			console.error('Bad argument type, expected L.Point');
+			return point;
+		}
+
+		return new L.Point(this._columns.getTileTwipsAtZoom(point.x, zoomScale),
+			this._rows.getTileTwipsAtZoom(point.y, zoomScale));
+	},
+
 	// accepts a point in print twips coordinates and returns the equivalent point
 	// in tile-twips.
 	getTileTwipsPointFromPrint: function (point) { // (L.Point) -> L.Point
@@ -1815,12 +1832,55 @@ L.SheetDimension = L.Class.extend({
 		return this._maxIndex;
 	},
 
+	// Accepts a position in display twips at current zoom and returns corresponding
+	// display twips position at the given zoomScale.
+	getTileTwipsAtZoom: function (posTT, zoomScale) {
+		if (typeof posTT !== 'number' || typeof zoomScale !== 'number') {
+			console.error('Wrong argument types');
+			return;
+		}
+
+		var posPT = this.getPrintTwipsPosFromTile(posTT);
+		return this.getTileTwipsPosFromPrint(posPT, zoomScale);
+	},
+
 	// Accepts a position in print twips and returns the corresponding position in tile twips.
-	getTileTwipsPosFromPrint: function (posPT) {
+	getTileTwipsPosFromPrint: function (posPT, zoomScale) {
 
 		if (typeof posPT !== 'number') {
 			console.error('Wrong argument type');
 			return;
+		}
+
+		if (typeof zoomScale === 'number') {
+			var posTT = 0;
+			var posPTInc = 0;
+			this._visibleSizes.forEachSpan(function (spanData) {
+				var count = spanData.end - spanData.start + 1;
+				var sizeSpanPT = spanData.size * count;
+				var sizeOneCorePx = Math.floor(spanData.size * zoomScale / 15.0);
+				var sizeSpanTT = Math.floor(sizeOneCorePx * count * 15 / zoomScale);
+
+				if (posPTInc >= posPT) {
+					return;
+				}
+
+				if (posPTInc + sizeSpanPT < posPT) {
+					// add whole span.
+					posPTInc += sizeSpanPT;
+					posTT += sizeSpanTT;
+					return;
+				}
+
+				// final span
+				var remainingPT = posPT - posPTInc;
+				var elemCountFinalSpan = Math.floor(remainingPT / spanData.size);
+				var extra = remainingPT - (elemCountFinalSpan * spanData.size);
+				posTT += (Math.floor(elemCountFinalSpan * sizeSpanTT / count) + extra);
+				posPTInc = posPT;
+			});
+
+			return posTT;
 		}
 
 		var element = this._getSpanAndIndexFromPrintTwipsPos(posPT);

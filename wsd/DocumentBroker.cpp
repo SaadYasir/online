@@ -1665,9 +1665,26 @@ void DocumentBroker::disconnectSessionInternal(const std::string& id)
             {
                 hardDisconnect = it->second->disconnectFromKit();
 
-                // Let the child know the client has disconnected.
-                const std::string msg("child-" + id + " disconnect");
-                _childProcess->sendTextFrame(msg);
+                if (isLoaded() || _sessions.size() > 1)
+                {
+                    // Let the child know the client has disconnected.
+                    const std::string msg("child-" + id + " disconnect");
+                    _childProcess->sendTextFrame(msg);
+                }
+                else
+                {
+                    // We aren't even loaded and no other views--kill.
+                    // If we send disconnect, we risk hanging because
+                    // we flag Core for quiting via unipoll, but Core
+                    // would still continue loading. If at the end of
+                    // loading it shows a dialog (such as the macro or
+                    // csv import dialogs), it will wait for their
+                    // dismissal indefinetely. Neither would our
+                    // load-timeout kick in, since we would be gone.
+                    LOG_INF("Session [" << id << "] disconnected but DocKey [" << _docKey
+                                        << "] isn't loaded yet. Terminating the child roughly.");
+                    _childProcess->terminate();
+                }
             }
 
             if (hardDisconnect)
@@ -1827,16 +1844,15 @@ bool DocumentBroker::handleInput(const std::vector<char>& payload)
     }
     else
     {
-        const auto& command = message->firstToken();
-        if (command == "tile:")
+        if (message->firstTokenMatches("tile:"))
         {
             handleTileResponse(payload);
         }
-        else if (command == "tilecombine:")
+        else if (message->firstTokenMatches("tilecombine:"))
         {
             handleTileCombinedResponse(payload);
         }
-        else if (command == "errortoall:")
+        else if (message->firstTokenMatches("errortoall:"))
         {
             LOG_CHECK_RET(message->tokens().size() == 3, false);
             std::string cmd, kind;
@@ -1846,7 +1862,7 @@ bool DocumentBroker::handleInput(const std::vector<char>& payload)
             LOG_CHECK_RET(kind != "", false);
             Util::alertAllUsers(cmd, kind);
         }
-        else if (command == "registerdownload:")
+        else if (message->firstTokenMatches("registerdownload:"))
         {
             LOG_CHECK_RET(message->tokens().size() == 3, false);
             std::string downloadid, url;

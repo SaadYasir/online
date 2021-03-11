@@ -338,7 +338,7 @@ protected:
         setNoDelay();
         _sendBufferSize = DefaultSendBufferSize;
         _owner = std::this_thread::get_id();
-        LOG_DBG('#' << _fd << " Thread affinity set to " << Log::to_string(_owner) << '.');
+        LOG_DBG('#' << _fd << " Created socket. Thread affinity set to " << Log::to_string(_owner));
 
 #if !MOBILEAPP
 #if ENABLE_DEBUG
@@ -663,8 +663,9 @@ public:
     void wakeup()
     {
         if (!isAlive())
-            LOG_WRN("Waking up dead poll thread [" << _name << "], started: " <<
-                    _threadStarted << ", finished: " << _threadFinished);
+            LOG_WRN("Waking up dead poll thread ["
+                    << _name << "], started: " << (_threadStarted ? "true" : "false")
+                    << ", finished: " << _threadFinished);
 
         wakeup(_wakeup[1]);
     }
@@ -775,8 +776,8 @@ private:
 
         for (size_t i = 0; i < size; ++i)
         {
-            int events = _pollSockets[i]->getPollEvents(now, timeoutMaxMicroS);
-            assert(events >= 0); // Or > 0 even?
+            const int events = _pollSockets[i]->getPollEvents(now, timeoutMaxMicroS);
+            assert(events >= 0 && "The events bitmask must be non-negative, where 0 means skip all events.");
             _pollFds[i].fd = _pollSockets[i]->getFD();
             _pollFds[i].events = events;
             _pollFds[i].revents = 0;
@@ -810,7 +811,7 @@ private:
     std::atomic<bool> _stop;
     /// The polling thread.
     std::thread _thread;
-    std::atomic<bool> _threadStarted;
+    std::atomic<int64_t> _threadStarted;
     std::atomic<bool> _threadFinished;
     std::atomic<bool> _runOnClientThread;
     std::thread::id _owner;

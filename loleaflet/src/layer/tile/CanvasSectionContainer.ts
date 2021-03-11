@@ -218,6 +218,7 @@ class CanvasSectionContainer {
 	private touchEventInProgress: boolean = false; // This prevents multiple calling of mouse down and up events.
 	public testing: boolean = false; // If this set to true, container will create a div element for every section. So, cypress tests can find where to click etc.
 	public lowestPropagatedBoundSection: string = null; // Event propagating to bound sections. The first section which stops propagating and the sections those are on top of that section, get the event.
+	private scrollLineHeight: number = 30; // This will be overridden.
 
 	constructor (canvasDOMElement: HTMLCanvasElement) {
 		this.canvas = canvasDOMElement;
@@ -235,6 +236,19 @@ class CanvasSectionContainer {
 		this.canvas.ontouchmove = this.onTouchMove.bind(this);
 		this.canvas.ontouchend = this.onTouchEnd.bind(this);
 		this.canvas.ontouchcancel = this.onTouchCancel.bind(this);
+
+		// Some explanation first.
+		// When the user uses the mouse wheel for scrolling, different browsers use different technics for calculating the deltaY and deltaX values.
+		// For example FireFox uses "deltaMode=1" which corresponds to "lines". So it creates the event with the number of lines to scroll.
+		// Chrome uses "deltaMode=0" which corresponds to "pixels". So it creates the event with the number of pixels to scroll.
+		// When "deltaMode=1" is used, we need to know the height of the line, so we will convert it to pixels.
+		// For that purpose, we'll create a temporary div element, get the font size and delete the temporary element.
+		let tempElement = document.createElement('div');
+		tempElement.style.fontSize = 'initial'; // IE doesn't support this property, but it uses "deltaMode=0" (so we don't need to get the line height).
+		tempElement.style.display = 'none';
+		document.body.appendChild(tempElement);
+		this.scrollLineHeight = parseInt(window.getComputedStyle(tempElement).fontSize);
+		document.body.removeChild(tempElement); // Remove the temporary element.
 	}
 
 	getContext () {
@@ -327,17 +341,15 @@ class CanvasSectionContainer {
 		if (section.boundToSection) {
 			var tempSection = this.getSectionWithName(section.boundToSection);
 			if (tempSection && tempSection.isLocated) {
-				if (tempSection.zIndex < section.zIndex || (tempSection.zIndex === section.zIndex && tempSection.drawingOrder < section.drawingOrder)) {
+				if (!sectionList.includes(tempSection))
 					tempSectionList.push(tempSection);
-				}
 			}
 		}
 
 		for (var i: number = 0; i < this.sections.length; i++) {
 			if (this.sections[i].isLocated && this.sections[i].boundToSection === section.name) {
-				if (this.sections[i].zIndex < section.zIndex || (this.sections[i].zIndex === section.zIndex && this.sections[i].drawingOrder < section.drawingOrder)) {
+				if (!sectionList.includes(this.sections[i]))
 					tempSectionList.push(this.sections[i]);
-				}
 			}
 		}
 
@@ -358,6 +370,16 @@ class CanvasSectionContainer {
 					section.boundsList[i] = section.boundsList[j];
 					section.boundsList[j] = temp;
 				}
+			}
+		}
+
+		// Remove the sections those are above this section. Events will not be propagated to them.
+		for (var i: number = section.boundsList.length - 1; i > -1; i--) {
+			if (section.boundsList[i].name !== section.name) {
+				section.boundsList.splice(i, 1);
+			}
+			else {
+				break;
 			}
 		}
 	}
@@ -636,7 +658,13 @@ class CanvasSectionContainer {
 
 	private onMouseWheel (e: WheelEvent) {
 		var point = this.convertPositionToCanvasLocale(e);
-		var delta: Array<number> = [e.deltaX, e.deltaY];
+		var delta: Array<number>;
+
+		if (e.deltaMode === 1)
+			delta = [e.deltaX * this.scrollLineHeight, e.deltaY * this.scrollLineHeight];
+		else
+			delta = [e.deltaX, e.deltaY];
+
 		var section: CanvasSectionObject = this.findSectionContainingPoint(point);
 		if (section)
 			this.propagateOnMouseWheel(section, this.convertPositionToSectionLocale(section, point), delta, e);

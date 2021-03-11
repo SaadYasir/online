@@ -151,16 +151,25 @@ class TilesSection {
 		}
 	}
 
-	paintSimple (tile: any, ctx: any) {
+	paintSimple (tile: any, ctx: any, async: boolean) {
 		ctx.viewBounds.round();
 		var offset = new L.Point(tile.coords.getPos().x - ctx.viewBounds.min.x, tile.coords.getPos().y - ctx.viewBounds.min.y);
 		var halfExtraSize = this.sectionProperties.osCanvasExtraSize / 2;
 		var extendedOffset = offset.add(new L.Point(halfExtraSize, halfExtraSize));
+
+		if (async) {
+			// Non Calc tiles(handled by paintSimple) can have transparent pixels,
+			// so clear before paint if the call is an async one.
+			// For the full view area repaint, whole canvas is cleared by section container.
+			this.context.fillStyle = this.containerObject.getClearColor();
+			this.context.fillRect(offset.x, offset.y, ctx.tileSize.x, ctx.tileSize.y);
+		}
+
 		this.context.drawImage(tile.el, offset.x, offset.y, ctx.tileSize.x, ctx.tileSize.y);
 		this.oscCtxs[0].drawImage(tile.el, extendedOffset.x, extendedOffset.y, ctx.tileSize.x, ctx.tileSize.y);
 	}
 
-	public paint (tile: any, ctx: any) {
+	public paint (tile: any, ctx: any, async: boolean = false) {
 		if (!ctx)
 			ctx = this.sectionProperties.tsManager._paintContext();
 
@@ -169,7 +178,7 @@ class TilesSection {
 		if (ctx.paneBoundsActive === true)
 			this.paintWithPanes(tile, ctx);
 		else
-			this.paintSimple(tile, ctx);
+			this.paintSimple(tile, ctx, async);
 	}
 
 	public onDraw () {
@@ -187,8 +196,8 @@ class TilesSection {
 			this.oscCtxs[i].fillRect(0, 0, this.offscreenCanvases[i].width, this.offscreenCanvases[i].height);
 		}
 
-		var tileRanges = ctx.paneBoundsList.map(this.sectionProperties.docLayer._pxBoundsToTileRange, this.sectionProperties.docLayer);
-
+		var docLayer = this.sectionProperties.docLayer;
+		var tileRanges = ctx.paneBoundsList.map(docLayer._pxBoundsToTileRange, docLayer);
 		for (var rangeIdx = 0; rangeIdx < tileRanges.length; ++rangeIdx) {
 			var tileRange = tileRanges[rangeIdx];
 			for (var j = tileRange.min.y; j <= tileRange.max.y; ++j) {
@@ -201,8 +210,9 @@ class TilesSection {
 
 					var key = coords.key();
 					var tile = this.sectionProperties.docLayer._tiles[key];
-					if (tile && tile.loaded) {
-						this.paint(tile, ctx);
+					// Ensure tile is loaded and is within document bounds.
+					if (tile && tile.loaded && docLayer._isValidTile(coords)) {
+						this.paint(tile, ctx, false /* async? */);
 					}
 				}
 			}
